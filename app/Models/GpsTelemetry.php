@@ -1,0 +1,30 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+
+class GpsTelemetry extends Model
+{
+    public $timestamps = false;
+
+    protected $table = 'gps_telemetry';
+
+    protected $fillable = [
+        'device_id', 'vehicle_id', 'trip_id',
+        'latitude', 'longitude', 'altitude',
+        'speed_kmh', 'heading', 'accuracy_m',
+        'satellites', 'gsm_signal', 'network_type',
+        'gps_timestamp', 'recorded_at',
+    ];
+
+    protected function casts(): array
+    {
+        return [
+            'latitude'      => 'float',
+            'longitude'     => 'float',
+            'gps_timestamp' => 'datetime',
+            'recorded_at'   => 'datetime',
+        ];
+    }
+}
