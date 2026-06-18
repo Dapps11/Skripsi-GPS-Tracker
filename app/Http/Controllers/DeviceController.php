@@ -36,7 +36,6 @@ class DeviceController extends Controller
     {
         $validated = $request->validate([
             'device_id'        => 'required|string|max:50|unique:iot_devices,device_id',
-            'device_type'      => 'required|in:sim7600,openmv,combined',
             'vehicle_id'       => 'nullable|exists:vehicles,id',
             'driver_id'        => 'nullable|exists:drivers,id',
             'imei'             => 'nullable|string|max:20',
@@ -49,10 +48,11 @@ class DeviceController extends Controller
             'notes'            => 'nullable|string',
         ]);
 
+        $validated['device_type'] = 'tracker'; // set otomatis
         IotDevice::create($validated);
 
         return redirect()->route('devices.index')
-                         ->with('success', 'Device berhasil ditambahkan.');
+                        ->with('success', 'Device berhasil ditambahkan.');
     }
 
     public function edit(IotDevice $device)

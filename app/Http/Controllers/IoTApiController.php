@@ -8,103 +8,302 @@ use App\Models\DriverMonitoringEvent;
 use App\Models\IotDevice;
 use App\Models\Vehicle;
 use App\Models\Alert;
+use App\Models\Trip;
+use App\Events\VehiclePositionUpdated;
+use App\Events\FleetStatusUpdated;
+use App\Events\TripStatusUpdated;
+use Illuminate\Support\Facades\DB;
 use Carbon\Carbon;
 
 class IoTApiController extends Controller
 {
-    /**
-     * SIM7600 kirim data GPS
-     * POST /api/telemetry
-     */
+    const MOVING_SPEED  = 2;
+    const ARRIVAL_DIST  = 0.03; // 30 meter
+
     public function receiveTelemetry(Request $request)
     {
         $data = $request->validate([
             'device_id'     => 'required|string',
-            'latitude'      => 'required|numeric',
-            'longitude'     => 'required|numeric',
-            'speed_kmh'     => 'required|numeric',
+            'latitude'      => 'required|numeric|between:-90,90',
+            'longitude'     => 'required|numeric|between:-180,180',
+            'speed_kmh'     => 'required|numeric|min:0',
             'heading'       => 'nullable|numeric',
+            'accuracy_m'    => 'nullable|numeric',
             'gsm_signal'    => 'nullable|integer',
-            'network_type'  => 'nullable|in:2G,3G,4G,5G',
+            'network_type'  => 'nullable|string',
             'gps_timestamp' => 'nullable|string',
         ]);
 
-        $device = IotDevice::where('device_id', $data['device_id'])->first();
+        $device = IotDevice::where('device_id', $data['device_id'])
+                           ->with(['vehicle', 'driver'])
+                           ->first();
+
         if (!$device) {
             return response()->json(['error' => 'Device not found'], 404);
         }
 
+        $isMoving      = $data['speed_kmh'] > self::MOVING_SPEED;
+        $deviceStatus  = $isMoving ? 'online' : 'idle';
+        $vehicleStatus = $isMoving ? 'moving' : 'idle';
+
+        // Simpan GPS
         GpsTelemetry::create([
             'device_id'     => $device->id,
             'vehicle_id'    => $device->vehicle_id,
             'latitude'      => $data['latitude'],
             'longitude'     => $data['longitude'],
             'speed_kmh'     => $data['speed_kmh'],
-            'heading'       => $data['heading'] ?? null,
+            'heading'       => $data['heading']    ?? null,
+            'accuracy_m'    => $data['accuracy_m'] ?? null,
             'gsm_signal'    => $data['gsm_signal'] ?? null,
             'network_type'  => $data['network_type'] ?? null,
-            'gps_timestamp' => isset($data['gps_timestamp']) ? Carbon::parse($data['gps_timestamp']) : now(),
+            'gps_timestamp' => isset($data['gps_timestamp'])
+                ? Carbon::parse($data['gps_timestamp'])
+                : now(),
             'recorded_at'   => now(),
         ]);
 
+        // Update device
         $device->update([
             'last_latitude'  => $data['latitude'],
             'last_longitude' => $data['longitude'],
             'last_speed_kmh' => $data['speed_kmh'],
             'last_heartbeat' => now(),
-            'status'         => $data['speed_kmh'] > 2 ? 'online' : 'idle',
+            'status'         => $deviceStatus,
         ]);
 
+        // Update vehicle
         if ($device->vehicle_id) {
-            Vehicle::where('id', $device->vehicle_id)->update([
-                'status' => $data['speed_kmh'] > 2 ? 'moving' : 'idle',
+            Vehicle::where('id', $device->vehicle_id)
+                   ->update(['status' => $vehicleStatus]);
+        }
+
+        // Handle trip logic
+        $activeTrip = null;
+        if ($device->vehicle_id) {
+            $activeTrip = $this->handleTripLogic(
+                $device,
+                $data['latitude'],
+                $data['longitude'],
+                $data['speed_kmh'],
+                $isMoving
+            );
+        }
+
+        // ── BROADCAST via WebSocket ───────────────────────────────
+        $this->broadcastUpdates($device, $data, $vehicleStatus, $activeTrip);
+
+        return response()->json([
+            'ok'     => true,
+            'status' => $deviceStatus,
+        ]);
+    }
+
+    private function broadcastUpdates(
+        IotDevice $device,
+        array $data,
+        string $vehicleStatus,
+        ?Trip $activeTrip
+    ): void {
+        // 1. Broadcast posisi kendaraan
+        if ($device->vehicle_id) {
+            broadcast(new VehiclePositionUpdated([
+                'vehicle_id'     => $device->vehicle_id,
+                'vehicle_name'   => optional($device->vehicle)->name,
+                'license_plate'  => optional($device->vehicle)->license_plate,
+                'vehicle_status' => $vehicleStatus,
+                'driver_name'    => optional($device->driver)->full_name,
+                'latitude'       => $data['latitude'],
+                'longitude'      => $data['longitude'],
+                'speed_kmh'      => round($data['speed_kmh']),
+                'heading'        => $data['heading'] ?? null,
+                'updated_at'     => now()->toISOString(),
+            ]))->toOthers();
+        }
+
+        // 2. Broadcast fleet summary
+        $summary = DB::table('v_fleet_summary')->first();
+        if ($summary) {
+            broadcast(new FleetStatusUpdated([
+                'moving'         => $summary->moving  ?? 0,
+                'idle'           => $summary->idle    ?? 0,
+                'offline'        => $summary->offline ?? 0,
+                'total_vehicles' => $summary->total_vehicles ?? 0,
+                'online'         => $summary->online ?? 0,
+            ]))->toOthers();
+        }
+
+        // 3. Broadcast trip status jika ada
+        if ($activeTrip && $device->vehicle_id) {
+            broadcast(new TripStatusUpdated($device->vehicle_id, [
+                'trip_id'    => $activeTrip->id,
+                'status'     => $activeTrip->status,
+                'trip_code'  => $activeTrip->trip_code,
+                'current_lat'  => $data['latitude'],
+                'current_lng'  => $data['longitude'],
+                'current_speed'=> round($data['speed_kmh']),
+            ]))->toOthers();
+        }
+    }
+
+    private function handleTripLogic(
+        IotDevice $device,
+        float $lat,
+        float $lng,
+        float $speed,
+        bool $isMoving
+    ): ?Trip {
+        $activeTrip = Trip::where('vehicle_id', $device->vehicle_id)
+                          ->where('status', 'in_progress')
+                          ->latest()->first();
+
+        if (!$activeTrip && $isMoving) {
+            $plannedTrip = Trip::where('vehicle_id', $device->vehicle_id)
+                               ->where('status', 'planned')
+                               ->whereNull('departed_at')
+                               ->latest()->first();
+
+            if ($plannedTrip) {
+                $dist      = $this->haversine(
+                    $plannedTrip->origin_lat, $plannedTrip->origin_lng,
+                    $plannedTrip->dest_lat,   $plannedTrip->dest_lng
+                );
+                $distRoad  = $dist * 1.3;
+                $durationM = (int) round(($distRoad / 40) * 60);
+
+                $plannedTrip->update([
+                    'status'               => 'in_progress',
+                    'departed_at'          => now(),
+                    'estimated_arrival_at' => now()->addMinutes($durationM),
+                    'device_id'            => $device->id,
+                ]);
+                $activeTrip = $plannedTrip;
+            }
+        }
+
+        if (!$activeTrip) return null;
+
+        // Assign trip_id ke GPS point terakhir
+        GpsTelemetry::where('device_id', $device->id)
+                     ->whereNull('trip_id')
+                     ->latest('recorded_at')
+                     ->limit(1)
+                     ->update(['trip_id' => $activeTrip->id]);
+
+        // Cek arrival
+        $distToDest = $this->haversine($lat, $lng, $activeTrip->dest_lat, $activeTrip->dest_lng);
+
+        if ($distToDest <= self::ARRIVAL_DIST) {
+            $totalDist = $this->calcTotalDistance($activeTrip->id);
+            $activeTrip->update([
+                'status'            => 'completed',
+                'arrived_at'        => now(),
+                'total_distance_km' => $totalDist,
+            ]);
+            Vehicle::where('id', $device->vehicle_id)->update(['status' => 'idle']);
+            $device->update(['status' => 'idle']);
+
+            Alert::create([
+                'alert_type'   => 'trip_completed',
+                'severity'     => 'info',
+                'vehicle_id'   => $device->vehicle_id,
+                'driver_id'    => $device->driver_id,
+                'device_id'    => $device->id,
+                'title'        => 'Trip Selesai — ' . optional($device->vehicle)->name,
+                'message'      => "Kendaraan tiba di {$activeTrip->dest_name}.",
+                'triggered_at' => now(),
             ]);
         }
 
-        return response()->json(['ok' => true]);
+        return $activeTrip;
     }
 
-    /**
-     * OpenMV kirim event kantuk
-     * POST /api/drowsy
-     */
+    private function calcTotalDistance(int $tripId): float
+    {
+        $points = GpsTelemetry::where('trip_id', $tripId)
+                               ->orderBy('gps_timestamp')
+                               ->get(['latitude', 'longitude']);
+        $total = 0.0;
+        for ($i = 1; $i < count($points); $i++) {
+            $total += $this->haversine(
+                $points[$i-1]->latitude, $points[$i-1]->longitude,
+                $points[$i]->latitude,   $points[$i]->longitude
+            );
+        }
+        return round($total, 2);
+    }
+
+    private function haversine(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $R    = 6371;
+        $dLat = deg2rad($lat2 - $lat1);
+        $dLng = deg2rad($lng2 - $lng1);
+        $a    = sin($dLat/2)**2
+              + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng/2)**2;
+        return $R * 2 * atan2(sqrt($a), sqrt(1-$a));
+    }
+
     public function receiveDrowsy(Request $request)
     {
+        // 1. Validasi format asli dari Python
         $data = $request->validate([
-            'device_id'     => 'required|string',
-            'event_type'    => 'required|in:normal,drowsy_warning,drowsy_alert,eyes_closed,yawning,distracted,no_face_detected',
-            'confidence'    => 'nullable|numeric|min:0|max:1',
-            'driver_status' => 'required|in:normal,warning,danger',
+            'device_id'  => 'required|string',
+            'event_type' => 'required|string', // 'drowsy' atau 'alarm'
+            'status'     => 'required|string', // 'AWAKE' atau 'DROWSY'
+            'reasons'    => 'nullable|array',
+            'perclos'    => 'nullable|numeric',
+            'ear'        => 'nullable|numeric',
+            'mar'        => 'nullable|numeric',
+            'alarm'      => 'required|boolean',
         ]);
 
+        // 2. Cari Device beserta Relasinya
         $device = IotDevice::where('device_id', $data['device_id'])->first();
         if (!$device) {
             return response()->json(['error' => 'Device not found'], 404);
         }
 
+        // 3. Cari Trip (Perjalanan) yang sedang aktif untuk kendaraan ini
+        $activeTrip = null;
+        if ($device->vehicle_id) {
+            $activeTrip = Trip::where('vehicle_id', $device->vehicle_id)
+                              ->where('status', 'in_progress')
+                              ->latest()
+                              ->first();
+        }
+
+        $reasonString = !empty($data['reasons']) ? implode(', ', $data['reasons']) : 'Terdeteksi mengantuk';
+
+        // 4. Simpan ke tabel driver_monitoring_events dengan relasi lengkap!
         DriverMonitoringEvent::create([
             'device_id'       => $device->id,
             'vehicle_id'      => $device->vehicle_id,
             'driver_id'       => $device->driver_id,
-            'event_type'      => $data['event_type'],
-            'confidence'      => $data['confidence'] ?? null,
-            'driver_status'   => $data['driver_status'],
+            'trip_id'         => $activeTrip ? $activeTrip->id : null, // <-- Otomatis terisi!
+            'event_type'      => $data['event_type'], 
+            'reasons'         => $reasonString,
+            'perclos_value'   => $data['perclos'] ?? null,
+            'ear_value'       => $data['ear'] ?? null,
+            'mar_value'       => $data['mar'] ?? null,
+            'is_alarm'        => $data['alarm'] ?? false,
             'event_timestamp' => now(),
             'recorded_at'     => now(),
         ]);
 
-        if (in_array($data['driver_status'], ['warning', 'danger'])) {
-            Alert::create([
-                'alert_type'   => 'drowsy_driver',
-                'severity'     => $data['driver_status'] === 'danger' ? 'critical' : 'warning',
-                'vehicle_id'   => $device->vehicle_id,
-                'driver_id'    => $device->driver_id,
-                'device_id'    => $device->id,
-                'title'        => 'Peringatan Kantuk - ' . optional($device->vehicle)->name,
-                'message'      => 'Terdeteksi ' . $data['event_type'] . ' (confidence: ' . round(($data['confidence'] ?? 0) * 100) . '%)',
-                'triggered_at' => now(),
-            ]);
-        }
+        // 5. Trigger Alert ke Dashboard (Truk Logistik)
+        $severityLevel = $data['event_type'] === 'alarm' ? 'critical' : 'warning';
+        $alertTitle    = $data['event_type'] === 'alarm' ? 'BAHAYA: Sopir Tertidur!' : 'Peringatan: Sopir Mulai Kelelahan';
+
+        Alert::create([
+            'alert_type'   => 'drowsy_driver',
+            'severity'     => $severityLevel,
+            'vehicle_id'   => $device->vehicle_id,
+            'driver_id'    => $device->driver_id,
+            'device_id'    => $device->id,
+            'title'        => $alertTitle . ' — ' . optional($device->vehicle)->name,
+            'message'      => 'Sistem mendeteksi: ' . $reasonString,
+            'triggered_at' => now(),
+        ]);
 
         return response()->json(['ok' => true]);
     }

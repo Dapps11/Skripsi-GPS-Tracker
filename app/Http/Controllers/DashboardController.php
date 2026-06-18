@@ -13,13 +13,11 @@ class DashboardController extends Controller
         $vehiclePositions = DB::table('v_vehicle_last_position')->get();
         $unreadAlerts     = Alert::where('is_read', false)
                                  ->orderByDesc('triggered_at')
-                                 ->take(10)
-                                 ->get();
+                                 ->take(10)->get();
 
-        return view('dashboard.index', compact(
-            'fleetSummary',
-            'vehiclePositions',
-            'unreadAlerts'
+        return view('dashboard.index', array_merge(
+            compact('fleetSummary', 'vehiclePositions', 'unreadAlerts'),
+            $this->mapConfig()
         ));
     }
 }

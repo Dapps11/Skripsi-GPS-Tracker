@@ -27,4 +27,12 @@ class GpsTelemetry extends Model
             'recorded_at'   => 'datetime',
         ];
     }
+
+    public function getGpsTimestampWibAttribute()
+    {
+        return \Carbon\Carbon::parse(
+            $this->gps_timestamp->format('Y-m-d H:i:s'),
+            'UTC'
+        )->setTimezone('Asia/Jakarta');
+    }
 }

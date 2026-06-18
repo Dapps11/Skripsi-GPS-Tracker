@@ -5,6 +5,7 @@ use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LiveMapController;
 use App\Http\Controllers\DeviceController;
+use App\Http\Controllers\TripController;
 use App\Http\Controllers\Masters\DriverMasterController;
 use App\Http\Controllers\Masters\VehicleMasterController;
 
@@ -35,4 +36,36 @@ Route::middleware('auth')->group(function () {
         Route::get('/trip/{vehicle}',    [\App\Http\Controllers\ApiController::class, 'tripDetail'])->name('trip');
         Route::get('/alerts',            [\App\Http\Controllers\ApiController::class, 'alerts'])->name('alerts');
     });
+
+    // GPS Tester — hanya untuk development
+    Route::get('/gps-tester', function () {
+        $devices = \App\Models\IotDevice::whereNull('deleted_at')
+                                        ->with('vehicle')
+                                        ->orderByDesc('created_at')
+                                        ->get();
+        return view('gps-tester', compact('devices'));
+    })->name('gps.tester');
+
+    // Map preference — simpan pilihan user
+    Route::post('/map-preference', function (\Illuminate\Http\Request $r) {
+        $type = in_array($r->input('type'), ['osm', 'gmaps']) ? $r->input('type') : 'osm';
+        session(['map_type' => $type]);
+        return response()->json(['ok' => true, 'type' => $type]);
+    })->middleware('auth')->name('map.preference');
+
+    Route::resource('trips', TripController::class);
+    Route::post('trips/{trip}/start',    [TripController::class, 'start'])->name('trips.start');
+    Route::post('trips/{trip}/complete', [TripController::class, 'complete'])->name('trips.complete');
+
+    Route::get('/api/internal/vehicle-device/{vehicle}', function (\App\Models\Vehicle $vehicle) {
+        $device = \App\Models\IotDevice::where('vehicle_id', $vehicle->id)
+                                    ->whereNull('deleted_at')
+                                    ->with('driver')
+                                    ->first();
+        return response()->json([
+            'device' => $device,
+            'driver' => $device?->driver,
+        ]);
+    })->middleware('auth');
+
 });

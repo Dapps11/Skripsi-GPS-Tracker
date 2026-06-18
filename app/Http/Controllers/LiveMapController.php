@@ -10,7 +10,11 @@ class LiveMapController extends Controller
     public function index()
     {
         $vehicles = DB::table('v_vehicle_last_position')->get();
-        return view('livemap.index', compact('vehicles'));
+
+        return view('livemap.index', array_merge(
+            compact('vehicles'),
+            $this->mapConfig()
+        ));
     }
 
     public function show(Vehicle $vehicle)
@@ -31,8 +35,9 @@ class LiveMapController extends Controller
 
         $vehicles = DB::table('v_vehicle_last_position')->get();
 
-        return view('livemap.index', compact(
-            'vehicle', 'trip', 'gpsPoints', 'latestDriverStatus', 'vehicles'
+        return view('livemap.index', array_merge(
+            compact('vehicle', 'trip', 'gpsPoints', 'latestDriverStatus', 'vehicles'),
+            $this->mapConfig()
         ));
     }
 }

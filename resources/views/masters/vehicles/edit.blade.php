@@ -55,21 +55,25 @@
                 </div>
             </div>
 
+            {{-- Brand, Model, Year --}}
             <div class="grid grid-cols-3 gap-4 mb-4">
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1.5">Brand</label>
-                    <input type="text" name="brand" value="{{ old('brand', $vehicle->brand) }}"
-                           class="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
+                    <input type="text" name="brand" value="{{ old('brand', $vehicle->brand ?? '') }}"
+                        placeholder="Mitsubishi, Isuzu..."
+                        class="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1.5">Model</label>
-                    <input type="text" name="model" value="{{ old('model', $vehicle->model) }}"
-                           class="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
+                    <input type="text" name="model" value="{{ old('model', $vehicle->model ?? '') }}"
+                        placeholder="Canter, Elf..."
+                        class="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
                 </div>
                 <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1.5">Tahun</label>
-                    <input type="number" name="year" value="{{ old('year', $vehicle->year) }}"
-                           class="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
+                    <input type="number" name="year" value="{{ old('year', $vehicle->year ?? '') }}"
+                        placeholder="2022" min="2000" max="2030"
+                        class="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
                 </div>
             </div>
 
@@ -79,11 +83,11 @@
                     <input type="text" name="color" value="{{ old('color', $vehicle->color) }}"
                            class="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
                 </div>
-                <div>
+                <!-- <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1.5">Kapasitas (Liter)</label>
                     <input type="number" name="capacity_liters" value="{{ old('capacity_liters', $vehicle->capacity_liters) }}"
                            class="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
-                </div>
+                </div> -->
             </div>
 
             <div class="mb-6">
