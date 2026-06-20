@@ -90,6 +90,33 @@
                 bottom: 16px !important; right: 16px !important;
                 left: auto !important; margin: 0 !important;
             }
+
+            /* Tabel responsive — scroll horizontal di mobile */
+            .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .table-responsive table { min-width: 600px; }
+
+            /* Card padding lebih kecil di mobile */
+            .card { border-radius: .875rem; }
+
+            /* Page padding */
+            .page-pad { padding: 1rem !important; }
+
+            /* Header action button — sembunyikan teks, tampilkan ikon saja */
+            .btn-text-hide { display: none; }
+
+            /* Summary grid — 2 kolom di mobile */
+            .summary-grid { grid-template-columns: repeat(2, 1fr) !important; }
+
+            /* Stack flex jadi column di mobile */
+            .mobile-stack { flex-direction: column !important; align-items: flex-start !important; }
+
+            /* Font size lebih kecil untuk heading di mobile */
+            .page-title { font-size: 1.25rem !important; }
+        }
+
+        @media (max-width: 480px) {
+            /* Summary grid — 1 kolom di layar sangat kecil */
+            .summary-grid { grid-template-columns: 1fr !important; }
         }
     </style>
 
@@ -289,11 +316,32 @@
             </div>
 
             {{-- Bell --}}
-            <button class="w-9 h-9 flex items-center justify-center bg-gray-50 border border-gray-200 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-all">
-                <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
-                </svg>
-            </button>
+            <div class="relative" id="notif-wrapper">
+                <button id="notif-btn"
+                        onclick="toggleNotif()"
+                        class="relative w-9 h-9 flex items-center justify-center bg-gray-50 border border-gray-200 rounded-xl text-gray-500 hover:text-gray-700 hover:bg-gray-100 transition-all">
+                    <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
+                    </svg>
+                    <span id="notif-badge"
+                          class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full items-center justify-content-center justify-center hidden">
+                        <span id="notif-count">0</span>
+                    </span>
+                </button>
+
+                {{-- Dropdown --}}
+                <div id="notif-dropdown"
+                     class="hidden absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-2xl shadow-xl z-[9999] overflow-hidden"
+                     style="max-height:420px;">
+                    <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                        <span class="text-sm font-bold text-gray-900">Notifikasi</span>
+                        <button onclick="markAllRead()" class="text-xs text-green-600 hover:text-green-700 font-semibold">Tandai semua dibaca</button>
+                    </div>
+                    <div id="notif-list" class="overflow-y-auto" style="max-height:360px;">
+                        <div class="px-4 py-8 text-center text-sm text-gray-400">Memuat...</div>
+                    </div>
+                </div>
+            </div>
         </div>
     </header>
 
@@ -420,6 +468,91 @@ fetch('/api/internal/fleet-summary')
         if (cntEl) cntEl.textContent = `${active}/${total}`;
         if (barEl && total > 0) barEl.style.width = `${Math.round((active/total)*100)}%`;
     }).catch(() => {});
+
+// ════════════════════════════════════════════════════════════════
+// NOTIFICATION SYSTEM
+// ════════════════════════════════════════════════════════════════
+let notifOpen = false;
+
+function toggleNotif() {
+    notifOpen = !notifOpen;
+    const dd = document.getElementById('notif-dropdown');
+    if (!dd) return;
+    dd.classList.toggle('hidden', !notifOpen);
+    if (notifOpen) loadNotifs();
+}
+
+// Tutup dropdown saat klik luar
+document.addEventListener('click', function(e) {
+    const wrapper = document.getElementById('notif-wrapper');
+    if (wrapper && !wrapper.contains(e.target) && notifOpen) {
+        notifOpen = false;
+        document.getElementById('notif-dropdown')?.classList.add('hidden');
+    }
+});
+
+async function loadNotifs() {
+    const list = document.getElementById('notif-list');
+    if (!list) return;
+    try {
+        const data = await fetch('/api/internal/alerts').then(r => r.json());
+        if (!data.length) {
+            list.innerHTML = '<div style="padding:2rem 1rem;text-align:center;color:#9ca3af;font-size:13px;">Tidak ada notifikasi baru.</div>';
+            return;
+        }
+        list.innerHTML = data.map(a => {
+            const iconColor = a.severity === 'critical' ? '#dc2626' : (a.severity === 'warning' ? '#f97316' : '#6b7280');
+            const bgColor   = a.severity === 'critical' ? '#fef2f2' : (a.severity === 'warning' ? '#fff7ed' : '#f9fafb');
+            const time = a.triggered_at ? new Date(a.triggered_at).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' }) : '';
+            return `<div style="display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid #f3f4f6;background:${bgColor};">
+                <div style="width:8px;height:8px;background:${iconColor};border-radius:50%;flex-shrink:0;margin-top:5px;"></div>
+                <div style="flex:1;min-width:0;">
+                    <div style="font-size:12px;font-weight:700;color:#111827;margin-bottom:2px;">${a.title}</div>
+                    <div style="font-size:11px;color:#6b7280;line-height:1.4;">${a.message ?? ''}</div>
+                    <div style="font-size:10px;color:#9ca3af;margin-top:3px;">${time}</div>
+                </div>
+            </div>`;
+        }).join('');
+    } catch(e) {
+        list.innerHTML = '<div style="padding:1rem;text-align:center;color:#ef4444;font-size:12px;">Gagal memuat notifikasi.</div>';
+    }
+}
+
+async function markAllRead() {
+    try {
+        await fetch('/api/internal/alerts/read-all', { method:'POST', headers:{'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content} });
+        const badge = document.getElementById('notif-badge');
+        if (badge) badge.classList.add('hidden');
+        loadNotifs();
+    } catch(e) {}
+}
+
+// Polling jumlah unread tiap 30 detik
+async function pollUnreadCount() {
+    try {
+        const data = await fetch('/api/internal/alerts').then(r => r.json());
+        const count = Array.isArray(data) ? data.length : 0;
+        const badge = document.getElementById('notif-badge');
+        const countEl = document.getElementById('notif-count');
+        if (badge && countEl) {
+            countEl.textContent = count > 9 ? '9+' : count;
+            badge.classList.toggle('hidden', count === 0);
+            badge.style.display = count > 0 ? 'flex' : 'none';
+        }
+    } catch(e) {}
+}
+
+// Init + poll tiap 30 detik
+pollUnreadCount();
+setInterval(pollUnreadCount, 30000);
+
+// Update badge saat ada WS event drowsy/alarm
+document.addEventListener('DOMContentLoaded', function() {
+    if (typeof window.Echo !== 'undefined') {
+        window.Echo.channel('fleet-tracking')
+            .listen('.alert.created', () => pollUnreadCount());
+    }
+});
 </script>
 
 @stack('scripts')

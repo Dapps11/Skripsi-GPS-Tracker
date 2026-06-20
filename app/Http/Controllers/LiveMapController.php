@@ -23,6 +23,26 @@ class LiveMapController extends Controller
                   ->where('vehicle_id', $vehicle->id)
                   ->first();
 
+        // Jika tidak ada trip aktif, cari trip terakhir yang selesai
+        $lastTrip = null;
+        if (!$trip) {
+            $lastTrip = DB::table('trips')
+                ->join('vehicles', 'trips.vehicle_id', '=', 'vehicles.id')
+                ->leftJoin('drivers', 'trips.driver_id', '=', 'drivers.id')
+                ->where('trips.vehicle_id', $vehicle->id)
+                ->whereIn('trips.status', ['completed', 'cancelled'])
+                ->orderByDesc('trips.arrived_at')
+                ->select(
+                    'trips.*',
+                    'vehicles.name as vehicle_name',
+                    'vehicles.license_plate',
+                    'vehicles.vehicle_type',
+                    'drivers.full_name as driver_name',
+                    'drivers.phone as driver_phone'
+                )
+                ->first();
+        }
+
         $gpsPoints = DB::table('gps_telemetry')
                        ->where('vehicle_id', $vehicle->id)
                        ->orderBy('gps_timestamp')
@@ -36,7 +56,7 @@ class LiveMapController extends Controller
         $vehicles = DB::table('v_vehicle_last_position')->get();
 
         return view('livemap.index', array_merge(
-            compact('vehicle', 'trip', 'gpsPoints', 'latestDriverStatus', 'vehicles'),
+            compact('vehicle', 'trip', 'lastTrip', 'gpsPoints', 'latestDriverStatus', 'vehicles'),
             $this->mapConfig()
         ));
     }

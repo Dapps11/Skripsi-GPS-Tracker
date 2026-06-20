@@ -135,12 +135,230 @@ class TripController extends Controller
             $etaHaversine = (int) round(($distRoad / $speed) * 60 + $delay);
         }
 
+        // Ambil data monitoring kantuk untuk trip ini
+        // Prioritas: trip_id match, fallback: vehicle_id + rentang waktu trip
+        $monitoringEvents = \App\Models\DriverMonitoringEvent::where('trip_id', $trip->id)
+            ->orderBy('event_timestamp')
+            ->get();
+
+        if ($monitoringEvents->isEmpty() && $trip->departed_at) {
+            $query = \App\Models\DriverMonitoringEvent::where('vehicle_id', $trip->vehicle_id)
+                ->where('event_timestamp', '>=', $trip->departed_at);
+            if ($trip->arrived_at) {
+                $query->where('event_timestamp', '<=',
+                    \Carbon\Carbon::parse($trip->arrived_at)->addMinutes(10)
+                );
+            }
+            $monitoringEvents = $query->orderBy('event_timestamp')->get();
+        }
+
         $mapType       = session('map_type', 'osm');
         $googleMapsKey = config('services.google_maps.key', '');
 
+        // Deteksi titik-titik berhenti (stop events) — pakai data mentah dulu
+        $stops = $this->detectStops($gpsPoints);
+
+        // Bersihkan/smoothing jalur sebelum digambar di peta —
+        // supaya "jitter" GPS saat diam tidak digambar sebagai belokan aneh
+        $gpsPointsForMap = $this->smoothTrack($gpsPoints);
+
+        // Transform untuk JS chart
+        $monitoringForChart = $monitoringEvents->map(function($e) {
+            return [
+                'time'          => \Carbon\Carbon::parse($e->event_timestamp)->setTimezone('Asia/Jakarta')->format('H:i:s'),
+                'event_type'    => $e->event_type,
+                'reasons'       => $e->reasons,
+                'perclos_value' => $e->perclos_value,
+                'ear_value'     => $e->ear_value,
+                'mar_value'     => $e->mar_value,
+                'is_alarm'      => $e->is_alarm,
+            ];
+        });
+
         return view('trips.show', compact(
-            'trip', 'gpsPoints', 'mapType', 'googleMapsKey', 'etaHaversine'
+            'trip', 'gpsPoints', 'gpsPointsForMap', 'mapType', 'googleMapsKey',
+            'etaHaversine', 'stops', 'monitoringEvents', 'monitoringForChart'
         ));
+    }
+
+    /**
+     * Bersihkan jalur GPS untuk digambar di peta:
+     *  1. Buang outlier — lompatan jarak yang implies kecepatan tidak masuk akal (> MAX_REALISTIC_SPEED)
+     *  2. Collapse segmen "diam" (speed <= threshold, durasi >= 1 menit) jadi 1 titik representatif,
+     *     supaya jitter GPS saat parkir/macet tidak tergambar sebagai jalur belok-belok.
+     *
+     * @param  \Illuminate\Support\Collection $gpsPoints  Urut by gps_timestamp ASC
+     * @return array  Array assoc sederhana [['latitude'=>,'longitude'=>,'speed_kmh'=>,'gps_timestamp'=>], ...]
+     */
+    private function smoothTrack($gpsPoints): array
+    {
+        $MAX_REALISTIC_SPEED  = 150;  // km/h — di atas ini, titik dianggap outlier/error GPS
+        $STOP_SPEED_THRESHOLD = 2;    // km/h — sama dengan threshold di detectStops()
+        $STOP_MIN_DURATION    = 1;    // menit
+
+        $points = $gpsPoints->values();
+        $total  = $points->count();
+
+        if ($total === 0) {
+            return [];
+        }
+
+        // ── Tahap 1: buang outlier berdasarkan kecepatan implisit antar titik ──
+        $clean = [$points[0]];
+        for ($i = 1; $i < $total; $i++) {
+            $prev = $clean[count($clean) - 1];
+            $curr = $points[$i];
+
+            $distKm = $this->haversine(
+                $prev->latitude, $prev->longitude,
+                $curr->latitude, $curr->longitude
+            );
+            $timeHours = abs(
+                \Carbon\Carbon::parse($curr->gps_timestamp)
+                    ->diffInSeconds(\Carbon\Carbon::parse($prev->gps_timestamp))
+            ) / 3600;
+
+            // Hindari pembagian dengan nol — kalau selisih waktu hampir 0 tapi jarak besar, anggap outlier
+            $impliedSpeed = $timeHours > 0 ? ($distKm / $timeHours) : ($distKm > 0.05 ? 9999 : 0);
+
+            if ($impliedSpeed > $MAX_REALISTIC_SPEED) {
+                // Lompatan tidak masuk akal → skip titik ini, jangan jadikan referensi "prev" berikutnya
+                continue;
+            }
+
+            $clean[] = $curr;
+        }
+
+        // ── Tahap 2: collapse segmen diam jadi 1 titik representatif ───────────
+        $cleanCount = count($clean);
+        $result     = [];
+        $i          = 0;
+
+        while ($i < $cleanCount) {
+            $pt = $clean[$i];
+
+            if (($pt->speed_kmh ?? 0) <= $STOP_SPEED_THRESHOLD) {
+                $segStart = $i;
+                $j = $i;
+                while ($j + 1 < $cleanCount && ($clean[$j + 1]->speed_kmh ?? 0) <= $STOP_SPEED_THRESHOLD) {
+                    $j++;
+                }
+                $segEnd = $j;
+
+                $startTime = \Carbon\Carbon::parse($clean[$segStart]->gps_timestamp);
+                $endTime   = \Carbon\Carbon::parse($clean[$segEnd]->gps_timestamp);
+                $durationMinutes = $startTime->diffInSeconds($endTime) / 60;
+
+                if ($durationMinutes >= $STOP_MIN_DURATION && $segEnd > $segStart) {
+                    // Segmen diam yang signifikan → ambil 1 titik representatif (tengah segmen)
+                    // supaya tidak digambar sebagai jalur belok-belok/jitter
+                    $midIdx = $segStart + intdiv($segEnd - $segStart, 2);
+                    $midPt  = $clean[$midIdx];
+
+                    $result[] = [
+                        'latitude'      => $midPt->latitude,
+                        'longitude'     => $midPt->longitude,
+                        'speed_kmh'     => $midPt->speed_kmh,
+                        'gps_timestamp' => $midPt->gps_timestamp,
+                    ];
+
+                    $i = $segEnd + 1;
+                    continue;
+                }
+                // Kalau durasi diam singkat (bukan stop signifikan), tetap masukkan apa adanya
+            }
+
+            $result[] = [
+                'latitude'      => $pt->latitude,
+                'longitude'     => $pt->longitude,
+                'speed_kmh'     => $pt->speed_kmh,
+                'gps_timestamp' => $pt->gps_timestamp,
+            ];
+            $i++;
+        }
+
+        return $result;
+    }
+
+    /**
+     * Deteksi stop events dari rangkaian GPS points.
+     * Stop = rangkaian titik berurutan dengan speed <= STOP_SPEED_THRESHOLD km/h
+     * yang berlangsung >= STOP_MIN_DURATION menit.
+     *
+     * @param  \Illuminate\Support\Collection $gpsPoints  Koleksi GpsTelemetry, urut by gps_timestamp ASC
+     * @return array  List stop events: [['lat'=>,'lng'=>,'started_at'=>,'ended_at'=>,'duration_minutes'=>,'duration_label'=>], ...]
+     */
+    private function detectStops($gpsPoints): array
+    {
+        $STOP_SPEED_THRESHOLD = 2;   // km/h — di bawah ini dianggap diam
+        $STOP_MIN_DURATION    = 1;   // menit — minimal durasi supaya dihitung "stop"
+
+        $stops      = [];
+        $points     = $gpsPoints->values();
+        $total      = $points->count();
+
+        if ($total < 2) {
+            return $stops;
+        }
+
+        $i = 0;
+        while ($i < $total) {
+            $pt = $points[$i];
+
+            // Cari awal segmen "diam"
+            if (($pt->speed_kmh ?? 0) <= $STOP_SPEED_THRESHOLD) {
+                $segStartIdx = $i;
+                $j = $i;
+
+                // Perluas selama speed masih <= threshold
+                while ($j + 1 < $total && ($points[$j + 1]->speed_kmh ?? 0) <= $STOP_SPEED_THRESHOLD) {
+                    $j++;
+                }
+
+                $segEndIdx = $j;
+                $startTime = \Carbon\Carbon::parse($points[$segStartIdx]->gps_timestamp);
+                $endTime   = \Carbon\Carbon::parse($points[$segEndIdx]->gps_timestamp);
+                $durationMinutes = $startTime->diffInSeconds($endTime) / 60;
+
+                if ($durationMinutes >= $STOP_MIN_DURATION) {
+                    // Titik representatif = titik tengah segmen (median index)
+                    $midIdx = $segStartIdx + intdiv($segEndIdx - $segStartIdx, 2);
+                    $midPt  = $points[$midIdx];
+
+                    $totalSeconds = $startTime->diffInSeconds($endTime);
+                    $durMin       = intdiv($totalSeconds, 60);
+                    $durSec       = $totalSeconds % 60;
+
+                    // Label detail: "1 menit 13 detik", atau "2 jam 5 menit 30 detik"
+                    if ($durMin >= 60) {
+                        $jam     = intdiv($durMin, 60);
+                        $sisaMin = $durMin % 60;
+                        $durLabel = "{$jam} jam {$sisaMin} menit {$durSec} detik";
+                    } elseif ($durMin > 0) {
+                        $durLabel = "{$durMin} menit {$durSec} detik";
+                    } else {
+                        $durLabel = "{$durSec} detik";
+                    }
+
+                    $stops[] = [
+                        'lat'              => (float) $midPt->latitude,
+                        'lng'              => (float) $midPt->longitude,
+                        'started_at'       => $startTime->setTimezone('Asia/Jakarta')->format('H:i:s'),
+                        'ended_at'         => $endTime->setTimezone('Asia/Jakarta')->format('H:i:s'),
+                        'duration_seconds' => $totalSeconds,
+                        'duration_minutes' => $durMin,
+                        'duration_label'   => $durLabel,
+                    ];
+                }
+
+                // Lanjut dari setelah segmen ini
+                $i = $segEndIdx + 1;
+            } else {
+                $i++;
+            }
+        }
+
+        return $stops;
     }
 
     private function haversine(float $lat1, float $lng1, float $lat2, float $lng2): float
@@ -157,37 +375,48 @@ class TripController extends Controller
     {
         $vehicles = Vehicle::whereNull('deleted_at')->orderBy('name')->get();
         $drivers  = Driver::whereNull('deleted_at')->orderBy('full_name')->get();
-        return view('trips.edit', compact('trip', 'vehicles', 'drivers'));
+
+        // Jika bukan planned, tetap tampilkan halaman tapi dengan banner locked
+        // (view sudah handle ini dengan $isLocked)
+        return view('trips.edit', array_merge(
+            compact('trip', 'vehicles', 'drivers'),
+            $this->mapConfig()
+        ));
     }
 
     public function update(Request $request, Trip $trip)
     {
+        // Hanya planned yang boleh diedit
+        if ($trip->status !== 'planned') {
+            return redirect()->route('trips.show', $trip)
+                ->withErrors(['error' => 'Trip yang sudah berjalan/selesai tidak bisa diedit.']);
+        }
+
         $validated = $request->validate([
-            'vehicle_id'           => 'required|exists:vehicles,id',
-            'driver_id'            => 'nullable|exists:drivers,id',
-            'origin_name'          => 'required|string|max:150',
-            'origin_address'       => 'nullable|string',
-            'origin_lat'           => 'required|numeric|between:-90,90',
-            'origin_lng'           => 'required|numeric|between:-180,180',
-            'dest_name'            => 'required|string|max:150',
-            'dest_address'         => 'nullable|string',
-            'dest_lat'             => 'required|numeric|between:-90,90',
-            'dest_lng'             => 'required|numeric|between:-180,180',
-            'departed_at'          => 'required|date',
-            'estimated_arrival_at' => 'nullable|date|after:departed_at',
-            'status'               => 'required|in:planned,in_progress,completed,cancelled',
-            'notes'                => 'nullable|string',
+            'vehicle_id'     => 'required|exists:vehicles,id',
+            'driver_id'      => 'nullable|exists:drivers,id',
+            'origin_name'    => 'required|string|max:150',
+            'origin_address' => 'nullable|string',
+            'origin_lat'     => 'required|numeric|between:-90,90',
+            'origin_lng'     => 'required|numeric|between:-180,180',
+            'dest_name'      => 'required|string|max:150',
+            'dest_address'   => 'nullable|string',
+            'dest_lat'       => 'required|numeric|between:-90,90',
+            'dest_lng'       => 'required|numeric|between:-180,180',
+            'notes'          => 'nullable|string',
         ]);
 
-        // Jika status completed → set arrived_at
-        if ($validated['status'] === 'completed' && !$trip->arrived_at) {
-            $validated['arrived_at'] = now();
-        }
+        // Status tetap planned, waktu tidak diubah user
+        $validated['status']      = 'planned';
+        $validated['driver_id']   = $validated['driver_id'] ?: null;
+        $validated['notes']       = $validated['notes'] ?: null;
+        $validated['origin_address'] = $validated['origin_address'] ?: null;
+        $validated['dest_address']   = $validated['dest_address'] ?: null;
 
         $trip->update($validated);
 
-        return redirect()->route('trips.index')
-                         ->with('success', "Trip {$trip->trip_code} diperbarui.");
+        return redirect()->route('trips.show', $trip)
+            ->with('success', "Trip {$trip->trip_code} berhasil diperbarui.");
     }
 
     public function destroy(Trip $trip)

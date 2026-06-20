@@ -69,6 +69,39 @@ class MarkOfflineDevices extends Command
                        ->update(['status' => 'idle']);
                 $idleCount++;
 
+                // Cek apakah kendaraan ini sedang dalam trip in_progress
+                // Jika ya → buat alert "kendaraan berhenti terlalu lama"
+                $activeTrip = \App\Models\Trip::where('vehicle_id', $device->vehicle_id)
+                    ->where('status', 'in_progress')
+                    ->first();
+
+                if ($activeTrip) {
+                    // Cek apakah alert serupa sudah dibuat dalam 30 menit terakhir (hindari spam)
+                    $recentAlert = \App\Models\Alert::where('vehicle_id', $device->vehicle_id)
+                        ->where('alert_type', 'vehicle_stopped')
+                        ->where('created_at', '>=', Carbon::now()->subMinutes(30))
+                        ->exists();
+
+                    if (!$recentAlert) {
+                        $stopDuration = (int) $lastMovedAt->diffInMinutes(Carbon::now());
+                        $vehicle = Vehicle::find($device->vehicle_id);
+
+                        \App\Models\Alert::create([
+                            'alert_type'   => 'vehicle_stopped',
+                            'severity'     => 'warning',
+                            'vehicle_id'   => $device->vehicle_id,
+                            'driver_id'    => $device->driver_id,
+                            'device_id'    => $device->id,
+                            'trip_id'      => $activeTrip->id,
+                            'title'        => 'Kendaraan Berhenti Terlalu Lama — ' . optional($vehicle)->name,
+                            'message'      => "Trip {$activeTrip->trip_code} sedang berjalan, tapi kendaraan sudah berhenti selama {$stopDuration} menit (speed = 0).",
+                            'triggered_at' => now(),
+                        ]);
+
+                        $this->line("  [alert] Vehicle {$device->vehicle_id} berhenti {$stopDuration} menit saat trip in_progress");
+                    }
+                }
+
                 $this->line("  [idle] Device {$device->device_id} — speed={$lastTelemetry->speed_kmh} since {$lastMovedAt}");
             }
         }

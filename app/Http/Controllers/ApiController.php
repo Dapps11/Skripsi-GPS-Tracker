@@ -186,8 +186,17 @@ class ApiController extends Controller
             Alert::where('is_read', false)
                  ->with(['vehicle', 'driver'])
                  ->orderByDesc('triggered_at')
-                 ->take(10)
+                 ->take(20)
                  ->get()
         );
+    }
+
+    public function markAlertsRead()
+    {
+        Alert::where('is_read', false)->update([
+            'is_read' => true,
+            'read_at' => now(),
+        ]);
+        return response()->json(['ok' => true]);
     }
 }

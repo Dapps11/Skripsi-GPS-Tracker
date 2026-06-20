@@ -34,7 +34,7 @@
 @endpush
 
 @section('content')
-<div class="p-6 max-w-3xl mx-auto">
+<div class="p-6 max-w-6xl mx-auto">
 
     <div class="flex items-center gap-2 text-sm text-gray-400 mb-6">
         <a href="{{ route('trips.index') }}" class="hover:text-green-500">Trip Management</a>
@@ -164,27 +164,21 @@
                 <div class="mb-3">
                     <label class="block text-sm font-semibold text-gray-700 mb-1.5">
                         Cari di Peta
-                        <span class="text-xs font-normal text-gray-400 ml-1">— ketik nama tempat, Enter untuk cari</span>
+                        <span class="text-xs font-normal text-gray-400 ml-1">— ketik untuk cari otomatis</span>
                     </label>
                     <div class="relative">
-                        <div class="flex gap-2 mb-2">
-                            <div class="relative flex-1">
-                                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                                </svg>
-                                <input type="text" id="origin-search"
-                                       placeholder="Cari tempat, contoh: Universitas Brawijaya..."
-                                       class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
-                            </div>
-                            <button type="button" onclick="doSearch('origin')"
-                                    class="px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-xl transition-all flex-shrink-0">
-                                Cari
-                            </button>
+                        <div class="relative">
+                            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                            <input type="text" id="origin-search"
+                                   placeholder="Ketik nama tempat, contoh: Universitas Brawijaya..."
+                                   class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
                         </div>
                         {{-- Dropdown hasil pencarian --}}
                         <div id="origin-results"
                              class="absolute z-50 w-full bg-white border border-gray-200 rounded-xl shadow-lg hidden overflow-hidden"
-                             style="top: calc(100% - 8px);">
+                             style="top: calc(100% + 4px);">
                         </div>
                     </div>
                 </div>
@@ -228,26 +222,20 @@
                 <div class="mb-3">
                     <label class="block text-sm font-semibold text-gray-700 mb-1.5">
                         Cari di Peta
-                        <span class="text-xs font-normal text-gray-400 ml-1">— ketik nama tempat, Enter untuk cari</span>
+                        <span class="text-xs font-normal text-gray-400 ml-1">— ketik untuk cari otomatis</span>
                     </label>
                     <div class="relative">
-                        <div class="flex gap-2 mb-2">
-                            <div class="relative flex-1">
-                                <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                                    <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
-                                </svg>
-                                <input type="text" id="dest-search"
-                                       placeholder="Cari tempat, contoh: Gudang Sapi Perah..."
-                                       class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
-                            </div>
-                            <button type="button" onclick="doSearch('dest')"
-                                    class="px-4 py-2.5 bg-green-500 hover:bg-green-600 text-white text-sm font-semibold rounded-xl transition-all flex-shrink-0">
-                                Cari
-                            </button>
+                        <div class="relative">
+                            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                            </svg>
+                            <input type="text" id="dest-search"
+                                   placeholder="Ketik nama tempat, contoh: Gudang Sapi Perah..."
+                                   class="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
                         </div>
                         <div id="dest-results"
                              class="absolute z-50 w-full bg-white border border-gray-200 rounded-xl shadow-lg hidden overflow-hidden"
-                             style="top: calc(100% - 8px);">
+                             style="top: calc(100% + 4px);">
                         </div>
                     </div>
                 </div>
@@ -529,10 +517,6 @@ function createGMaps() {
         const lat = e.latLng.lat(), lng = e.latLng.lng();
         await setCoord('dest', lat, lng);
     });
-
-    // Setup Google Places Autocomplete setelah map siap
-    setupGoogleAutocomplete('origin');
-    setupGoogleAutocomplete('dest');
 }
 
 function updateGMarker(type, lat, lng) {
@@ -649,91 +633,94 @@ function doTextSearch(type, query) {
 }
 
 // ════════════════════════════════════════════════════════════════
-// NOMINATIM SEARCH (untuk mode OSM)
+// LIVE SEARCH — debounce 400ms, ketik langsung muncul hasil
 // ════════════════════════════════════════════════════════════════
-async function doNominatimSearch(type) {
-    const inputEl   = document.getElementById(`${type}-search`);
-    const resultsEl = document.getElementById(`${type}-results`);
-    const q         = inputEl.value.trim();
-    if (!q) return;
+let _searchTimers = {};
 
-    resultsEl.innerHTML = `<div class="search-result-item" style="color:#9ca3af;">🔍 Mencari...</div>`;
-    resultsEl.classList.remove('hidden');
+function liveSearch(type) {
+    clearTimeout(_searchTimers[type]);
+    const q = document.getElementById(`${type}-search`).value.trim();
+    const resEl = document.getElementById(`${type}-results`);
 
+    if (q.length < 2) { resEl.classList.add('hidden'); return; }
+
+    _searchTimers[type] = setTimeout(() => {
+        if (MAP_TYPE === 'gmaps' && gmapsReady && window.google) {
+            doGoogleLiveSearch(type, q, resEl);
+        } else {
+            doNominatimLiveSearch(type, q, resEl);
+        }
+    }, 400);
+}
+
+async function doNominatimLiveSearch(type, q, resEl) {
+    resEl.innerHTML = '<div class="search-result-item" style="color:#9ca3af;">🔍 Mencari...</div>';
+    resEl.classList.remove('hidden');
     try {
-        const res  = await fetch(
+        const r = await fetch(
             `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(q)}&format=json&limit=6&countrycodes=id`,
             { headers: { 'Accept-Language': 'id' } }
         );
-        const data = await res.json();
-        resultsEl.innerHTML = '';
-
+        const data = await r.json();
+        resEl.innerHTML = '';
         if (!data.length) {
-            resultsEl.innerHTML = `<div class="search-result-item" style="color:#9ca3af;">Tidak ditemukan. Coba kata kunci lain.</div>`;
+            resEl.innerHTML = '<div class="search-result-item" style="color:#9ca3af;">Tidak ditemukan.</div>';
             return;
         }
-
         data.forEach(place => {
-            const div       = document.createElement('div');
-            div.className   = 'search-result-item';
-            const nameParts = place.display_name.split(',');
-            const shortName = nameParts.slice(0,2).join(',').trim();
-            const fullAddr  = place.display_name;
-
-            div.innerHTML = `
-                <div style="font-weight:600;color:#111827;margin-bottom:2px;">${shortName}</div>
-                <div style="color:#9ca3af;font-size:10px;">${fullAddr}</div>`;
-
+            const div = document.createElement('div');
+            div.className = 'search-result-item';
+            const parts = place.display_name.split(',');
+            const shortName = parts.slice(0, 2).join(',').trim();
+            div.innerHTML = `<div style="font-weight:600;color:#111827;margin-bottom:2px;">${shortName}</div>
+                             <div style="color:#9ca3af;font-size:10px;">${place.display_name}</div>`;
             div.onclick = async () => {
-                const lat = parseFloat(place.lat);
-                const lng = parseFloat(place.lon);
-                await setCoord(type, lat, lng, fullAddr);
-
-                const nameInput = document.getElementById(`${type}-name`);
-                if (nameInput && !nameInput.value.trim()) nameInput.value = shortName;
-
-                inputEl.value = shortName;
-                resultsEl.classList.add('hidden');
+                const lat = parseFloat(place.lat), lng = parseFloat(place.lon);
+                await setCoord(type, lat, lng, place.display_name);
+                const nameEl = document.getElementById(`${type}-name`);
+                if (nameEl && !nameEl.value.trim()) nameEl.value = shortName;
+                document.getElementById(`${type}-search`).value = shortName;
+                resEl.classList.add('hidden');
             };
-            resultsEl.appendChild(div);
+            resEl.appendChild(div);
         });
-    } catch(e) {
-        resultsEl.innerHTML = `<div class="search-result-item" style="color:#ef4444;">Gagal mencari. Periksa koneksi.</div>`;
+    } catch {
+        resEl.innerHTML = '<div class="search-result-item" style="color:#ef4444;">Gagal mencari.</div>';
     }
 }
 
-// ════════════════════════════════════════════════════════════════
-// FUNGSI doSearch — dipanggil oleh button "Cari"
-// ════════════════════════════════════════════════════════════════
-function doSearch(type) {
-    if (MAP_TYPE === 'gmaps' && gmapsReady && window.google) {
-        // Google Maps mode: pakai text search
-        const q = document.getElementById(`${type}-search`).value.trim();
-        if (q) doTextSearch(type, q);
-    } else {
-        // OSM mode: pakai Nominatim
-        doNominatimSearch(type);
-    }
+function doGoogleLiveSearch(type, q, resEl) {
+    resEl.innerHTML = '<div class="search-result-item" style="color:#9ca3af;">🔍 Mencari...</div>';
+    resEl.classList.remove('hidden');
+    const svc = new google.maps.places.PlacesService(document.createElement('div'));
+    svc.textSearch({ query: q, region: 'id' }, async (results, status) => {
+        resEl.innerHTML = '';
+        if (status !== google.maps.places.PlacesServiceStatus.OK || !results.length) {
+            resEl.innerHTML = '<div class="search-result-item" style="color:#9ca3af;">Tidak ditemukan.</div>';
+            return;
+        }
+        results.slice(0, 6).forEach(place => {
+            const div = document.createElement('div');
+            div.className = 'search-result-item';
+            const addr = place.formatted_address || place.vicinity || '';
+            div.innerHTML = `<div style="font-weight:600;color:#111827;margin-bottom:2px;">${place.name}</div>
+                             <div style="color:#9ca3af;font-size:10px;">${addr}</div>`;
+            div.onclick = async () => {
+                const lat = place.geometry.location.lat(), lng = place.geometry.location.lng();
+                await setCoord(type, lat, lng, `${place.name}, ${addr}`);
+                const nameEl = document.getElementById(`${type}-name`);
+                if (nameEl && !nameEl.value.trim()) nameEl.value = place.name;
+                document.getElementById(`${type}-search`).value = place.name;
+                resEl.classList.add('hidden');
+            };
+            resEl.appendChild(div);
+        });
+    });
 }
 
-// ════════════════════════════════════════════════════════════════
-// EVENT LISTENERS
-// ════════════════════════════════════════════════════════════════
-document.getElementById('origin-search').addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        // Google Autocomplete sudah handle Enter sendiri
-        // Ini untuk fallback jika user ketik manual tanpa pilih suggestion
-        if (MAP_TYPE !== 'gmaps' || !gmapsReady) doSearch('origin');
-    }
-});
-
-document.getElementById('dest-search').addEventListener('keydown', e => {
-    if (e.key === 'Enter') {
-        e.preventDefault();
-        if (MAP_TYPE !== 'gmaps' || !gmapsReady) doSearch('dest');
-    }
-});
+// Attach live search ke input
+document.getElementById('origin-search').addEventListener('input', () => liveSearch('origin'));
+document.getElementById('dest-search').addEventListener('input',   () => liveSearch('dest'));
 
 // Klik luar dropdown → tutup
 document.addEventListener('click', e => {

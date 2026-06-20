@@ -41,8 +41,10 @@
     <div id="dash-gmap"></div>
 
     {{-- Fleet Card Overlay --}}
-    <div style="position:absolute;bottom:24px;left:24px;z-index:1000;width:260px;">
-        <div style="background:white;border-radius:1.25rem;box-shadow:0 8px 32px rgba(0,0,0,.13);border:1px solid #f1f5f9;padding:1rem;">
+    <div style="position:absolute;bottom:16px;left:16px;z-index:1000;"
+         class="w-[220px] sm:w-[260px]">
+        <div style="background:white;border-radius:1.25rem;box-shadow:0 8px 32px rgba(0,0,0,.13);border:1px solid #f1f5f9;padding:.875rem;"
+             class="md:p-4">
             <div style="font-size:14px;font-weight:800;color:#111827;margin-bottom:12px;">Active Fleet</div>
 
             <a href="{{ route('livemap.index') }}" class="fleet-card">

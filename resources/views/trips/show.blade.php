@@ -3,8 +3,8 @@
 
 @push('styles')
 <style>
-    #history-map  { height:420px; border-radius:14px; border:1.5px solid #e5e7eb; }
-    #history-gmap { height:420px; border-radius:14px; display:none; }
+    #history-map  { height:560px; border-radius:14px; border:1.5px solid #e5e7eb; }
+    #history-gmap { height:560px; border-radius:14px; display:none; }
 
     @media (max-width: 768px) {
         #history-map, #history-gmap { height: 280px; }
@@ -18,11 +18,25 @@
     .legend-item { display:flex; align-items:center; gap:6px; font-size:11px; color:#374151; }
     .legend-line { width:28px; height:4px; border-radius:2px; flex-shrink:0; }
     .legend-dot  { width:12px; height:12px; border-radius:50%; border:2px solid white; flex-shrink:0; }
+
+    /* Bubble chat untuk titik stop di peta */
+    .stop-bubble-tooltip {
+        background: white !important;
+        border: 1.5px solid #dc2626 !important;
+        border-radius: 10px !important;
+        padding: 6px 10px !important;
+        box-shadow: 0 2px 8px rgba(220,38,38,.25) !important;
+        font-size: 11px !important;
+        line-height: 1.4 !important;
+    }
+    .stop-bubble-tooltip::before {
+        border-top-color: #dc2626 !important;
+    }
 </style>
 @endpush
 
 @section('content')
-<div class="p-4 md:p-6 max-w-5xl mx-auto">
+<div class="p-4 md:p-6 w-full max-w-[1600px] mx-auto">
 
     {{-- Breadcrumb --}}
     <div class="flex items-center gap-2 text-sm text-gray-400 mb-5">
@@ -75,10 +89,10 @@
     </div>
 
     {{-- Main Content --}}
-    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+    <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
 
         {{-- Stats Panel --}}
-        <div class="md:col-span-1 space-y-3">
+        <div class="lg:col-span-1 space-y-3">
 
             {{-- Rute --}}
             <div class="card p-4">
@@ -194,6 +208,25 @@
                 </div>
 
                 <div class="stat-box">
+                    <div class="stat-label">Jumlah Stop</div>
+                    <div class="stat-value">
+                        {{ count($stops) }}
+                        <span class="stat-unit">kali</span>
+                    </div>
+                    @if(count($stops) > 0)
+                    @php
+                        $totalStopSec = collect($stops)->sum('duration_seconds');
+                        $tsMin = intdiv($totalStopSec, 60);
+                        $tsSec = $totalStopSec % 60;
+                        $totalStopLabel = $tsMin >= 60
+                            ? floor($tsMin / 60) . 'j ' . ($tsMin % 60) . 'm ' . $tsSec . 'd'
+                            : ($tsMin > 0 ? $tsMin . 'm ' . $tsSec . 'd' : $tsSec . 'd');
+                    @endphp
+                    <div style="font-size:10px;color:#9ca3af;margin-top:2px;">total {{ $totalStopLabel }} berhenti</div>
+                    @endif
+                </div>
+
+                <div class="stat-box">
                     <div class="stat-label">Device</div>
                     <div style="font-size:11px;font-weight:700;color:#111827;margin-top:4px;word-break:break-all;">
                         {{ $trip->device->device_id ?? '—' }}
@@ -213,6 +246,28 @@
                 <div class="stat-box">
                     <div class="stat-label">Kec. Rata</div>
                     <div class="stat-value">{{ $avgSpd }}<span class="stat-unit"> km/h</span></div>
+                </div>
+                @endif
+
+                {{-- Monitoring kantuk --}}
+                @if($monitoringEvents->count() > 0)
+                @php
+                    $alarmCount = $monitoringEvents->where('is_alarm', 1)->count();
+                    $drowsyCount = $monitoringEvents->whereIn('event_type', ['drowsy', 'drowsy_warning'])->count();
+                @endphp
+                <div class="stat-box col-span-2" style="background:#fff7ed;border:1px solid #fed7aa;">
+                    <div class="stat-label" style="color:#c2410c;">⚠️ Deteksi Kantuk</div>
+                    <div class="flex items-end gap-3 mt-1">
+                        <div>
+                            <div class="stat-value" style="color:#dc2626;">{{ $alarmCount }}</div>
+                            <div style="font-size:9px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Alarm</div>
+                        </div>
+                        <div style="width:1px;height:32px;background:#fed7aa;flex-shrink:0;"></div>
+                        <div>
+                            <div class="stat-value" style="color:#f97316;">{{ $drowsyCount }}</div>
+                            <div style="font-size:9px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Drowsy</div>
+                        </div>
+                    </div>
                 </div>
                 @endif
             </div>
@@ -237,12 +292,18 @@
                     <div class="legend-dot" style="background:#ef4444;box-shadow:0 0 0 2px #ef444455;"></div>
                     <span>Titik Tujuan</span>
                 </div>
+                @if(count($stops) > 0)
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#dc2626;box-shadow:0 0 0 2px #dc262655;"></div>
+                    <span>Titik Berhenti ({{ count($stops) }})</span>
+                </div>
+                @endif
             </div>
             @endif
         </div>
 
         {{-- Map --}}
-        <div class="md:col-span-2">
+        <div class="lg:col-span-3">
             <div id="history-map"></div>
             <div id="history-gmap"></div>
 
@@ -327,6 +388,120 @@
     </div>
     @endif
 
+    {{-- Grafik Deteksi Kantuk --}}
+    @if($monitoringEvents->count() > 0)
+    @php
+        $alarmEvents  = $monitoringEvents->where('is_alarm', 1);
+        $drowsyEvents = $monitoringEvents->whereIn('event_type', ['drowsy', 'drowsy_warning']);
+        $normalEvents = $monitoringEvents->where('event_type', 'normal');
+
+        // Hitung ringkasan reasons
+        $allReasons = $monitoringEvents->pluck('reasons')->filter()->flatMap(fn($r) => explode(', ', $r));
+        $reasonCounts = $allReasons->countBy()->sortDesc();
+    @endphp
+    <div class="card p-5 mt-4">
+        <div class="flex items-center justify-between mb-4">
+            <h3 class="text-sm font-bold text-gray-900">
+                😴 Grafik Deteksi Kantuk
+                <span class="text-xs font-normal text-gray-400 ml-2">({{ $monitoringEvents->count() }} event)</span>
+            </h3>
+            {{-- Legend --}}
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-1.5 text-xs text-gray-500">
+                    <div class="w-3 h-3 rounded-full bg-red-500"></div> Alarm ({{ $alarmEvents->count() }})
+                </div>
+                <div class="flex items-center gap-1.5 text-xs text-gray-500">
+                    <div class="w-3 h-3 rounded-full bg-orange-400"></div> Drowsy ({{ $drowsyEvents->count() }})
+                </div>
+                <div class="flex items-center gap-1.5 text-xs text-gray-500">
+                    <div class="w-3 h-3 rounded-full bg-green-400"></div> Normal ({{ $normalEvents->count() }})
+                </div>
+            </div>
+        </div>
+
+        {{-- Ringkasan reasons --}}
+        @if($reasonCounts->count() > 0)
+        <div class="flex flex-wrap gap-2 mb-4">
+            @foreach($reasonCounts as $reason => $count)
+            <span class="px-2.5 py-1 text-xs font-semibold rounded-full
+                {{ str_contains($reason, 'PERCLOS') ? 'bg-red-100 text-red-700' :
+                   (str_contains($reason, 'YAWN') ? 'bg-orange-100 text-orange-700' :
+                   (str_contains($reason, 'MICROSLEEP') ? 'bg-yellow-100 text-yellow-700' :
+                   'bg-gray-100 text-gray-600')) }}">
+                {{ $reason }} <span class="opacity-60">×{{ $count }}</span>
+            </span>
+            @endforeach
+        </div>
+        @endif
+
+        {{-- Canvas grafik --}}
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            <div>
+                <div class="text-xs font-bold text-gray-500 mb-2">PERCLOS & Event Type (over time)</div>
+                <canvas id="chart-perclos" height="160"></canvas>
+            </div>
+            <div>
+                <div class="text-xs font-bold text-gray-500 mb-2">EAR & MAR (over time)</div>
+                <canvas id="chart-ear-mar" height="160"></canvas>
+            </div>
+        </div>
+
+        {{-- DEBUG — hapus setelah dicek --}}
+<div class="p-3 bg-gray-100 text-xs font-mono mt-4">
+    Monitoring events: {{ $monitoringEvents->count() }}<br>
+    Trip departed_at: {{ $trip->departed_at }}<br>
+    Trip arrived_at: {{ $trip->arrived_at }}<br>
+    Trip vehicle_id: {{ $trip->vehicle_id }}
+</div>
+
+        {{-- Tabel event alarm --}}
+        @if($alarmEvents->count() > 0)
+        <div class="mt-4">
+            <div class="text-xs font-bold text-gray-500 mb-2">🚨 Daftar Event Alarm</div>
+            <div class="overflow-x-auto">
+                <table class="w-full text-xs">
+                    <thead>
+                        <tr class="border-b border-gray-100">
+                            <th class="text-left font-bold text-gray-400 uppercase pb-2 pr-4">Waktu</th>
+                            <th class="text-left font-bold text-gray-400 uppercase pb-2 pr-4">Alasan</th>
+                            <th class="text-left font-bold text-gray-400 uppercase pb-2 pr-4">PERCLOS</th>
+                            <th class="text-left font-bold text-gray-400 uppercase pb-2 pr-4">EAR</th>
+                            <th class="text-left font-bold text-gray-400 uppercase pb-2">MAR</th>
+                        </tr>
+                    </thead>
+                    <tbody class="divide-y divide-gray-50">
+                        @foreach($alarmEvents as $ev)
+                        <tr class="bg-red-50">
+                            <td class="py-2 pr-4 font-mono text-gray-700">
+                                {{ \Carbon\Carbon::parse($ev->event_timestamp)->setTimezone('Asia/Jakarta')->format('H:i:s') }}
+                            </td>
+                            <td class="py-2 pr-4">
+                                @foreach(explode(', ', $ev->reasons ?? '') as $r)
+                                <span class="inline-block px-1.5 py-0.5 rounded text-[10px] font-bold mr-1
+                                    {{ str_contains($r, 'PERCLOS') ? 'bg-red-200 text-red-800' :
+                                       (str_contains($r, 'YAWN') ? 'bg-orange-200 text-orange-800' :
+                                       'bg-yellow-200 text-yellow-800') }}">{{ $r }}</span>
+                                @endforeach
+                            </td>
+                            <td class="py-2 pr-4 font-mono {{ $ev->perclos_value > 0.4 ? 'text-red-600 font-bold' : 'text-gray-600' }}">
+                                {{ $ev->perclos_value !== null ? number_format($ev->perclos_value, 3) : '—' }}
+                            </td>
+                            <td class="py-2 pr-4 font-mono {{ $ev->ear_value < 0.2 ? 'text-red-600 font-bold' : 'text-gray-600' }}">
+                                {{ $ev->ear_value !== null ? number_format($ev->ear_value, 3) : '—' }}
+                            </td>
+                            <td class="py-2 font-mono {{ $ev->mar_value > 0.8 ? 'text-orange-600 font-bold' : 'text-gray-600' }}">
+                                {{ $ev->mar_value !== null ? number_format($ev->mar_value, 3) : '—' }}
+                            </td>
+                        </tr>
+                        @endforeach
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        @endif
+    </div>
+    @endif
+
 </div>
 @endsection
 
@@ -334,8 +509,10 @@
 <script>
 const MAP_TYPE  = "{{ $mapType }}";
 const GMAPS_KEY = "{{ $googleMapsKey }}";
-const gpsPoints = @json($gpsPoints);
+const gpsPoints = @json($gpsPointsForMap);
+const gpsPointsRaw = @json($gpsPoints); // data mentah, dipakai timeline table (sudah dirender server-side)
 const trip      = @json($trip);
+const stopEvents = @json($stops);
 
 // Helper sample points
 function samplePoints(pts, max) {
@@ -424,6 +601,39 @@ async function initOSMHistory() {
      .addTo(map)
      .bindTooltip(`<b>🔴 ${trip.dest_name}</b>`, { permanent: false, direction: 'bottom' });
 
+    // ── Stop markers (titik berhenti lama) ────────────────────────
+    if (stopEvents && stopEvents.length) {
+        stopEvents.forEach(stop => {
+            const stopIcon = L.divIcon({
+                html: `<div style="
+                            width:16px;height:16px;background:#dc2626;border-radius:50%;
+                            border:3px solid white;box-shadow:0 0 0 4px #dc262640;
+                            display:flex;align-items:center;justify-content:center;
+                        ">
+                            <div style="width:5px;height:5px;background:white;border-radius:50%;"></div>
+                        </div>`,
+                iconSize: [16, 16], iconAnchor: [8, 8], className: ''
+            });
+
+            const stopMarker = L.marker([stop.lat, stop.lng], {
+                icon: stopIcon,
+                zIndexOffset: 600
+            }).addTo(map);
+
+            // Bubble chat permanen (seperti chat bubble)
+            stopMarker.bindTooltip(
+                `<div style="font-weight:700;color:#dc2626;">⏱️ Stop ${stop.duration_label}</div>
+                 <div style="font-size:10px;color:#6b7280;">${stop.started_at} — ${stop.ended_at}</div>`,
+                {
+                    permanent: true,
+                    direction: 'top',
+                    offset: [0, -10],
+                    className: 'stop-bubble-tooltip'
+                }
+            );
+        });
+    }
+
     // Fit bounds ke semua elemen
     const allCoords = [];
     if (gpsPoints && gpsPoints.length) {
@@ -472,10 +682,12 @@ window.createGHistory = function () {
         const rdr = new google.maps.DirectionsRenderer({
             map: gMap,
             suppressMarkers: true,
+            preserveViewport: true,
             polylineOptions: {
                 strokeColor:   '#4f46e5',
                 strokeWeight:  5,
                 strokeOpacity: .88,
+                zIndex: 1,
             },
         });
         svc.route({
@@ -495,11 +707,14 @@ window.createGHistory = function () {
         new google.maps.Polyline({
             path: coords, map: gMap,
             strokeColor: '#fb923c', strokeOpacity: .2, strokeWeight: 10,
+            zIndex: 2,
         });
-        // Garis orange utama
+        // Garis orange utama — zIndex lebih tinggi supaya selalu di atas garis biru,
+        // termasuk setelah DirectionsRenderer selesai render secara async
         new google.maps.Polyline({
             path: coords, map: gMap,
             strokeColor: '#f97316', strokeOpacity: .9, strokeWeight: 4.5,
+            zIndex: 3,
         });
     }
 
@@ -527,6 +742,75 @@ window.createGHistory = function () {
         title: 'End: ' + trip.dest_name,
         zIndex: 998,
     });
+
+    // ── Custom permanent bubble overlay (tidak ada tombol close) ───
+    class StopBubbleOverlay extends google.maps.OverlayView {
+        constructor(position, html) {
+            super();
+            this.position = position;
+            this.html     = html;
+            this.div      = null;
+        }
+        onAdd() {
+            this.div = document.createElement('div');
+            this.div.style.position = 'absolute';
+            this.div.style.transform = 'translate(-50%, -100%)';
+            this.div.style.background = 'white';
+            this.div.style.border = '1.5px solid #dc2626';
+            this.div.style.borderRadius = '10px';
+            this.div.style.padding = '6px 10px';
+            this.div.style.boxShadow = '0 2px 8px rgba(220,38,38,.25)';
+            this.div.style.fontSize = '11px';
+            this.div.style.lineHeight = '1.4';
+            this.div.style.whiteSpace = 'nowrap';
+            this.div.style.pointerEvents = 'none'; // tidak menghalangi interaksi peta
+            this.div.innerHTML = this.html;
+            this.getPanes().floatPane.appendChild(this.div);
+        }
+        draw() {
+            const proj = this.getProjection();
+            if (!proj || !this.div) return;
+            const point = proj.fromLatLngToDivPixel(this.position);
+            if (point) {
+                this.div.style.left = point.x + 'px';
+                this.div.style.top  = (point.y - 14) + 'px';
+            }
+        }
+        onRemove() {
+            if (this.div) {
+                this.div.parentNode.removeChild(this.div);
+                this.div = null;
+            }
+        }
+    }
+
+    // ── Stop markers (titik berhenti lama) ────────────────────────
+    if (stopEvents && stopEvents.length) {
+        stopEvents.forEach(stop => {
+            new google.maps.Marker({
+                position: { lat: stop.lat, lng: stop.lng },
+                map: gMap,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 8, fillColor: '#dc2626', fillOpacity: 1,
+                    strokeColor: 'white', strokeWeight: 3,
+                },
+                title: `Stop ${stop.duration_label} (${stop.started_at} - ${stop.ended_at})`,
+                zIndex: 999,
+            });
+
+            // Bubble chat permanen — custom overlay, tidak ada tombol close
+            const bubbleHtml = `
+                <div style="font-weight:700;color:#dc2626;">⏱️ Stop ${stop.duration_label}</div>
+                <div style="font-size:10px;color:#6b7280;margin-top:2px;">${stop.started_at} — ${stop.ended_at}</div>
+            `;
+            const overlay = new StopBubbleOverlay(
+                new google.maps.LatLng(stop.lat, stop.lng),
+                bubbleHtml
+            );
+            overlay.setMap(gMap);
+        });
+    }
 
     // Fit bounds
     const bounds = new google.maps.LatLngBounds();
@@ -611,4 +895,171 @@ if (MAP_TYPE === 'gmaps' && GMAPS_KEY) {
     initOSMHistory();
 }
 </script>
+
+@if($monitoringEvents->count() > 0)
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<script>
+// ════════════════════════════════════════════════════════════════
+// GRAFIK DETEKSI KANTUK
+// ════════════════════════════════════════════════════════════════
+const monitoringEvents = @json($monitoringForChart);
+
+// Warna per event_type
+function eventColor(type, alpha = 1) {
+    if (type === 'alarm')         return `rgba(220,38,38,${alpha})`;
+    if (type === 'drowsy')        return `rgba(249,115,22,${alpha})`;
+    if (type === 'drowsy_warning')return `rgba(234,179,8,${alpha})`;
+    return `rgba(34,197,94,${alpha})`;
+}
+
+const labels      = monitoringEvents.map(e => e.time);
+const perclosData = monitoringEvents.map(e => e.perclos_value !== null ? +e.perclos_value : null);
+const earData     = monitoringEvents.map(e => e.ear_value     !== null ? +e.ear_value     : null);
+const marData     = monitoringEvents.map(e => e.mar_value     !== null ? +e.mar_value     : null);
+const bgColors    = monitoringEvents.map(e => eventColor(e.event_type, 0.85));
+const borderColors= monitoringEvents.map(e => eventColor(e.event_type, 1));
+
+const chartDefaults = {
+    responsive: true,
+    interaction: { mode: 'index', intersect: false },
+    plugins: {
+        legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 14 } },
+        tooltip: {
+            callbacks: {
+                afterBody: (items) => {
+                    const idx = items[0]?.dataIndex;
+                    const ev  = monitoringEvents[idx];
+                    if (!ev) return '';
+                    const lines = [`Tipe: ${ev.event_type.toUpperCase()}`];
+                    if (ev.reasons) lines.push(`Alasan: ${ev.reasons}`);
+                    if (ev.is_alarm) lines.push('🚨 ALARM AKTIF');
+                    return lines;
+                }
+            }
+        }
+    },
+    scales: {
+        x: {
+            ticks: { font: { size: 9 }, maxTicksLimit: 12, maxRotation: 0 },
+            grid:  { color: '#f1f5f9' }
+        },
+        y: {
+            min: 0, max: 1.3,
+            ticks: { font: { size: 10 }, stepSize: 0.2 },
+            grid:  { color: '#f1f5f9' }
+        }
+    }
+};
+
+// ── Chart 1: PERCLOS + event type background ──────────────────
+new Chart(document.getElementById('chart-perclos'), {
+    type: 'bar',
+    data: {
+        labels,
+        datasets: [
+            {
+                label: 'PERCLOS',
+                data: perclosData,
+                backgroundColor: bgColors,
+                borderColor:     borderColors,
+                borderWidth: 1.5,
+                borderRadius: 3,
+                order: 2,
+            },
+            {
+                label: 'Threshold Alarm (0.4)',
+                data: monitoringEvents.map(() => 0.4),
+                type: 'line',
+                borderColor: 'rgba(220,38,38,0.5)',
+                borderDash: [5, 4],
+                borderWidth: 1.5,
+                pointRadius: 0,
+                fill: false,
+                order: 1,
+            }
+        ]
+    },
+    options: {
+        ...chartDefaults,
+        plugins: {
+            ...chartDefaults.plugins,
+            tooltip: {
+                ...chartDefaults.plugins.tooltip,
+                callbacks: {
+                    ...chartDefaults.plugins.tooltip.callbacks,
+                    label: (ctx) => {
+                        if (ctx.datasetIndex === 1) return null;
+                        const val = ctx.parsed.y;
+                        return ` PERCLOS: ${val !== null ? val.toFixed(3) : '—'}`;
+                    }
+                }
+            }
+        }
+    }
+});
+
+// ── Chart 2: EAR & MAR line chart ────────────────────────────
+new Chart(document.getElementById('chart-ear-mar'), {
+    type: 'line',
+    data: {
+        labels,
+        datasets: [
+            {
+                label: 'EAR (Eye Aspect Ratio)',
+                data: earData,
+                borderColor: '#3b82f6',
+                backgroundColor: 'rgba(59,130,246,0.08)',
+                borderWidth: 2,
+                pointRadius: 3,
+                pointBackgroundColor: borderColors,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 1.5,
+                tension: 0.3,
+                fill: false,
+                spanGaps: true,
+            },
+            {
+                label: 'MAR (Mouth Aspect Ratio)',
+                data: marData,
+                borderColor: '#8b5cf6',
+                backgroundColor: 'rgba(139,92,246,0.08)',
+                borderWidth: 2,
+                pointRadius: 3,
+                pointBackgroundColor: borderColors,
+                pointBorderColor: '#fff',
+                pointBorderWidth: 1.5,
+                tension: 0.3,
+                fill: false,
+                spanGaps: true,
+            },
+            {
+                label: 'Threshold EAR (0.2)',
+                data: monitoringEvents.map(() => 0.2),
+                borderColor: 'rgba(59,130,246,0.35)',
+                borderDash: [5, 4],
+                borderWidth: 1.5,
+                pointRadius: 0,
+                fill: false,
+            },
+            {
+                label: 'Threshold MAR (0.8)',
+                data: monitoringEvents.map(() => 0.8),
+                borderColor: 'rgba(139,92,246,0.35)',
+                borderDash: [5, 4],
+                borderWidth: 1.5,
+                pointRadius: 0,
+                fill: false,
+            }
+        ]
+    },
+    options: {
+        ...chartDefaults,
+        scales: {
+            ...chartDefaults.scales,
+            y: { ...chartDefaults.scales.y, max: 1.5 }
+        }
+    }
+});
+</script>
+@endif
 @endpush
