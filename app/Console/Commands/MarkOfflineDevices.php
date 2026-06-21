@@ -12,13 +12,13 @@ use Illuminate\Support\Facades\Broadcast;
 class MarkOfflineDevices extends Command
 {
     protected $signature   = 'devices:mark-offline';
-    protected $description = 'Mark devices offline jika tidak ada heartbeat > 10 menit, idle jika speed=0 > 15 menit';
+    protected $description = 'Mark devices offline jika tidak ada heartbeat > 10 menit, alert jika berhenti > 10 menit saat trip aktif';
 
     public function handle(): void
     {
         $now            = Carbon::now();
         $offlineThresh  = $now->copy()->subMinutes(10);  // heartbeat > 10 menit → offline
-        $idleThresh     = $now->copy()->subMinutes(15);  // speed=0 > 15 menit → idle
+        $idleThresh     = $now->copy()->subMinutes(10);  // speed=0 > 10 menit → idle + alert jika trip aktif
 
         // ── 1. Online/Idle → Offline (tidak ada heartbeat > 10 menit) ────────
         $offlineDevices = IotDevice::whereIn('status', ['online', 'idle'])
@@ -43,8 +43,8 @@ class MarkOfflineDevices extends Command
             $this->info("Marked {$offlineDevices->count()} device(s) as offline.");
         }
 
-        // ── 2. Moving → Idle (speed = 0 selama > 15 menit) ──────────────────
-        // Cek device yang masih 'online' (moving) tapi telemetri terakhirnya speed=0 > 15 menit
+        // ── 2. Moving → Idle (speed = 0 selama > 10 menit) ──────────────────
+        // Cek device yang masih 'online' (moving) tapi telemetri terakhirnya speed=0 > 10 menit
         $movingDevices = IotDevice::where('status', 'online')
             ->whereNotNull('vehicle_id')
             ->get();
@@ -58,7 +58,7 @@ class MarkOfflineDevices extends Command
 
             if (!$lastTelemetry) continue;
 
-            // Jika speed = 0 (atau sangat rendah) dan sudah > 15 menit
+            // Jika speed = 0 (atau sangat rendah) dan sudah > 10 menit
             $lastMovedAt = Carbon::parse($lastTelemetry->gps_timestamp);
             $isStoppedLong = $lastTelemetry->speed_kmh <= 2
                 && $lastMovedAt->lt($idleThresh);
@@ -107,7 +107,7 @@ class MarkOfflineDevices extends Command
         }
 
         if ($idleCount > 0) {
-            $this->info("Marked {$idleCount} device(s) as idle (speed=0 > 15 menit).");
+            $this->info("Marked {$idleCount} device(s) as idle (speed=0 > 10 menit).");
         }
 
         // ── 3. Broadcast fleet status update ─────────────────────────────────

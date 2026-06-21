@@ -3,7 +3,9 @@
 namespace App\Http\Controllers;
 
 use App\Models\Alert;
+use App\Models\Driver;
 use App\Models\Vehicle;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 
 class ApiController extends Controller
@@ -189,6 +191,49 @@ class ApiController extends Controller
                  ->take(20)
                  ->get()
         );
+    }
+
+    public function search(Request $request)
+    {
+        $q    = $request->get('q', '');
+        $type = $request->get('type', 'vehicle');
+
+        if (strlen($q) < 2) return response()->json([]);
+
+        if ($type === 'vehicle') {
+            return response()->json(
+                Vehicle::whereNull('deleted_at')
+                    ->where(function($qb) use ($q) {
+                        $qb->where('name', 'like', "%{$q}%")
+                           ->orWhere('license_plate', 'like', "%{$q}%")
+                           ->orWhere('vehicle_code', 'like', "%{$q}%");
+                    })
+                    ->select('id', 'name', 'license_plate', 'vehicle_code', 'status')
+                    ->limit(6)
+                    ->get()
+            );
+        }
+
+        return response()->json(
+            Driver::whereNull('deleted_at')
+                ->where(function($qb) use ($q) {
+                    $qb->where('full_name', 'like', "%{$q}%")
+                       ->orWhere('driver_code', 'like', "%{$q}%")
+                       ->orWhere('phone', 'like', "%{$q}%");
+                })
+                ->select('id', 'full_name', 'driver_code', 'status')
+                ->limit(6)
+                ->get()
+        );
+    }
+
+    public function markAlertRead($id)
+    {
+        Alert::where('id', $id)->update([
+            'is_read' => true,
+            'read_at' => now(),
+        ]);
+        return response()->json(['ok' => true]);
     }
 
     public function markAlertsRead()

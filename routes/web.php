@@ -36,6 +36,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/trip/{vehicle}',    [\App\Http\Controllers\ApiController::class, 'tripDetail'])->name('trip');
         Route::get('/alerts',            [\App\Http\Controllers\ApiController::class, 'alerts'])->name('alerts');
         Route::post('/alerts/read-all',  [\App\Http\Controllers\ApiController::class, 'markAlertsRead'])->name('alerts.read');
+        Route::post('/alerts/{id}/read', [\App\Http\Controllers\ApiController::class, 'markAlertRead'])->name('alerts.read.one');
+        Route::get('/search',            [\App\Http\Controllers\ApiController::class, 'search'])->name('search');
     });
 
     // GPS Tester — hanya untuk development

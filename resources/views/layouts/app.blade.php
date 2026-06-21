@@ -267,11 +267,19 @@
                 </svg>
             </button>
 
-            <div class="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 w-64">
+            <div class="hidden md:flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2 w-64 relative">
                 <svg class="w-4 h-4 text-gray-400 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                 </svg>
-                <span class="text-sm text-gray-400">Cari kendaraan, driver...</span>
+                <input id="global-search-input"
+                       type="text"
+                       placeholder="Cari kendaraan, driver..."
+                       autocomplete="off"
+                       class="bg-transparent text-sm text-gray-700 placeholder-gray-400 outline-none w-full">
+                <div id="global-search-results"
+                     class="hidden absolute left-0 top-full mt-1 w-full bg-white border border-gray-200 rounded-xl shadow-lg z-[9999] overflow-hidden"
+                     style="min-width:280px;max-height:320px;overflow-y:auto;">
+                </div>
             </div>
         </div>
 
@@ -324,7 +332,7 @@
                         <path stroke-linecap="round" stroke-linejoin="round" d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"/>
                     </svg>
                     <span id="notif-badge"
-                          class="absolute -top-1 -right-1 w-4 h-4 bg-red-500 text-white text-[9px] font-bold rounded-full items-center justify-content-center justify-center hidden">
+                          style="display:none;position:absolute;top:-4px;right:-4px;width:16px;height:16px;background:#ef4444;color:white;font-size:9px;font-weight:700;border-radius:50%;align-items:center;justify-content:center;">
                         <span id="notif-count">0</span>
                     </span>
                 </button>
@@ -356,204 +364,7 @@
 {{-- ════════════════════════════════════════════════════════════ --}}
 
 {{-- Map switcher --}}
-<script>
-function globalSwitchMap(type) {
-    fetch('/map-preference', {
-        method:  'POST',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-        },
-        body: JSON.stringify({ type }),
-    }).then(() => window.location.reload());
-}
-</script>
-
-{{-- Sidebar mobile --}}
-<script>
-function toggleSidebar() {
-    const sidebar = document.querySelector('aside');
-    const overlay = document.getElementById('sidebar-overlay');
-    const isOpen  = sidebar.classList.contains('open');
-    sidebar.classList.toggle('open', !isOpen);
-    overlay.classList.toggle('show', !isOpen);
-}
-window.addEventListener('resize', () => {
-    if (window.innerWidth >= 768) {
-        document.querySelector('aside')?.classList.remove('open');
-        document.getElementById('sidebar-overlay')?.classList.remove('show');
-    }
-});
-</script>
-
-{{-- ── WebSocket — Global Echo Listener ── --}}
-<script>
-document.addEventListener('DOMContentLoaded', function () {
-    if (typeof window.Echo === 'undefined') {
-        console.warn('Laravel Echo tidak tersedia. Pastikan npm run build sudah dijalankan.');
-        return;
-    }
-
-    // ── WebSocket connection indicator ────────────────────────────
-    const wsDot  = document.getElementById('ws-dot');
-    const wsText = document.getElementById('ws-text');
-
-    function setWSStatus(connected) {
-        if (wsDot)  wsDot.style.background  = connected ? '#22c55e' : '#ef4444';
-        if (wsText) wsText.textContent       = connected ? 'Live'    : 'Off';
-        if (wsText) wsText.style.color       = connected ? '#15803d' : '#b91c1c';
-    }
-
-    // Monitor koneksi Reverb
-    window.Echo.connector.pusher.connection.bind('connected',    () => setWSStatus(true));
-    window.Echo.connector.pusher.connection.bind('disconnected', () => setWSStatus(false));
-    window.Echo.connector.pusher.connection.bind('error', (err) => {
-        console.error('WS Error:', err);
-        setWSStatus(false);
-    });
-
-    window.Echo.connector.pusher.connection.bind('state_change', (states) => {
-        console.log('WS State:', states.previous, '→', states.current);
-        setWSStatus(states.current === 'connected');
-    });
-
-    // ── Listen fleet-tracking channel ────────────────────────────
-    window.Echo.channel('fleet-tracking')
-
-        .listen('.vehicle.position.updated', (data) => {
-            // Update dashboard marker
-            if (typeof window.updateDashboardMarker === 'function') {
-                window.updateDashboardMarker(data);
-            }
-            // Update livemap marker & panel
-            if (typeof window.updateLivemapMarker  === 'function') window.updateLivemapMarker(data);
-            if (typeof window.updateLivemapPanel   === 'function') window.updateLivemapPanel(data);
-        })
-
-        .listen('.fleet.status.updated', (data) => {
-            // Update fleet counters — dashboard
-            ['cnt-moving','cnt-idle','cnt-offline'].forEach((id, i) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = [data.moving, data.idle, data.offline][i] || 0;
-            });
-            // Header badge
-            const active  = Number(data.moving || 0) + Number(data.idle || 0);
-            const total   = Number(data.total_vehicles || 0);
-            const hdrEl   = document.getElementById('hdr-active-text');
-            if (hdrEl) hdrEl.textContent = `${active} TRUCKS ACTIVE`;
-            // Sidebar fleet bar
-            const cntEl = document.getElementById('sb-fleet-count');
-            const barEl = document.getElementById('sb-fleet-bar');
-            if (cntEl) cntEl.textContent = `${active}/${total}`;
-            if (barEl && total > 0) barEl.style.width = `${Math.round((active/total)*100)}%`;
-        })
-
-        .listen('.trip.status.updated', (data) => {
-            if (typeof window.handleTripUpdate === 'function') {
-                window.handleTripUpdate(data);
-            }
-        });
-});
-
-// ── Fleet summary — init saat halaman load ────────────────────────
-fetch('/api/internal/fleet-summary')
-    .then(r => r.json())
-    .then(d => {
-        const active = Number(d.moving||0) + Number(d.idle||0);
-        const total  = Number(d.total_vehicles||0);
-        const hdrEl  = document.getElementById('hdr-active-text');
-        const cntEl  = document.getElementById('sb-fleet-count');
-        const barEl  = document.getElementById('sb-fleet-bar');
-        if (hdrEl) hdrEl.textContent = `${active} TRUCKS ACTIVE`;
-        if (cntEl) cntEl.textContent = `${active}/${total}`;
-        if (barEl && total > 0) barEl.style.width = `${Math.round((active/total)*100)}%`;
-    }).catch(() => {});
-
-// ════════════════════════════════════════════════════════════════
-// NOTIFICATION SYSTEM
-// ════════════════════════════════════════════════════════════════
-let notifOpen = false;
-
-function toggleNotif() {
-    notifOpen = !notifOpen;
-    const dd = document.getElementById('notif-dropdown');
-    if (!dd) return;
-    dd.classList.toggle('hidden', !notifOpen);
-    if (notifOpen) loadNotifs();
-}
-
-// Tutup dropdown saat klik luar
-document.addEventListener('click', function(e) {
-    const wrapper = document.getElementById('notif-wrapper');
-    if (wrapper && !wrapper.contains(e.target) && notifOpen) {
-        notifOpen = false;
-        document.getElementById('notif-dropdown')?.classList.add('hidden');
-    }
-});
-
-async function loadNotifs() {
-    const list = document.getElementById('notif-list');
-    if (!list) return;
-    try {
-        const data = await fetch('/api/internal/alerts').then(r => r.json());
-        if (!data.length) {
-            list.innerHTML = '<div style="padding:2rem 1rem;text-align:center;color:#9ca3af;font-size:13px;">Tidak ada notifikasi baru.</div>';
-            return;
-        }
-        list.innerHTML = data.map(a => {
-            const iconColor = a.severity === 'critical' ? '#dc2626' : (a.severity === 'warning' ? '#f97316' : '#6b7280');
-            const bgColor   = a.severity === 'critical' ? '#fef2f2' : (a.severity === 'warning' ? '#fff7ed' : '#f9fafb');
-            const time = a.triggered_at ? new Date(a.triggered_at).toLocaleTimeString('id-ID', { hour:'2-digit', minute:'2-digit' }) : '';
-            return `<div style="display:flex;gap:10px;padding:12px 16px;border-bottom:1px solid #f3f4f6;background:${bgColor};">
-                <div style="width:8px;height:8px;background:${iconColor};border-radius:50%;flex-shrink:0;margin-top:5px;"></div>
-                <div style="flex:1;min-width:0;">
-                    <div style="font-size:12px;font-weight:700;color:#111827;margin-bottom:2px;">${a.title}</div>
-                    <div style="font-size:11px;color:#6b7280;line-height:1.4;">${a.message ?? ''}</div>
-                    <div style="font-size:10px;color:#9ca3af;margin-top:3px;">${time}</div>
-                </div>
-            </div>`;
-        }).join('');
-    } catch(e) {
-        list.innerHTML = '<div style="padding:1rem;text-align:center;color:#ef4444;font-size:12px;">Gagal memuat notifikasi.</div>';
-    }
-}
-
-async function markAllRead() {
-    try {
-        await fetch('/api/internal/alerts/read-all', { method:'POST', headers:{'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content} });
-        const badge = document.getElementById('notif-badge');
-        if (badge) badge.classList.add('hidden');
-        loadNotifs();
-    } catch(e) {}
-}
-
-// Polling jumlah unread tiap 30 detik
-async function pollUnreadCount() {
-    try {
-        const data = await fetch('/api/internal/alerts').then(r => r.json());
-        const count = Array.isArray(data) ? data.length : 0;
-        const badge = document.getElementById('notif-badge');
-        const countEl = document.getElementById('notif-count');
-        if (badge && countEl) {
-            countEl.textContent = count > 9 ? '9+' : count;
-            badge.classList.toggle('hidden', count === 0);
-            badge.style.display = count > 0 ? 'flex' : 'none';
-        }
-    } catch(e) {}
-}
-
-// Init + poll tiap 30 detik
-pollUnreadCount();
-setInterval(pollUnreadCount, 30000);
-
-// Update badge saat ada WS event drowsy/alarm
-document.addEventListener('DOMContentLoaded', function() {
-    if (typeof window.Echo !== 'undefined') {
-        window.Echo.channel('fleet-tracking')
-            .listen('.alert.created', () => pollUnreadCount());
-    }
-});
-</script>
+<script src="{{ asset('js/app-layout.js') }}"></script>
 
 @stack('scripts')
 
