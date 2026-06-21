@@ -387,4 +387,3 @@ if (MAP_TYPE === 'gmaps' && GMAPS_KEY) {
 } else {
     initOSMHistory();
 }
-</script>

@@ -161,4 +161,3 @@ new Chart(document.getElementById('chart-ear-mar'), {
         }
     }
 });
-</script>

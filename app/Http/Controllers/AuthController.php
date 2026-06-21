@@ -23,6 +23,14 @@ class AuthController extends Controller
             ['username' => $credentials['username'], 'password' => $credentials['password']],
             $request->boolean('remember')
         )) {
+            // Cek apakah akun aktif
+            if (!Auth::user()->is_active) {
+                Auth::logout();
+                return back()
+                    ->withErrors(['username' => 'Akun Anda telah dinonaktifkan. Hubungi administrator.'])
+                    ->onlyInput('username');
+            }
+
             $request->session()->regenerate();
             return redirect()->intended(route('dashboard'));
         }

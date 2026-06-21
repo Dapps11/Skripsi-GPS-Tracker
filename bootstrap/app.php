@@ -19,6 +19,10 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
 
         $middleware->trustProxies(at: '*');
+
+        $middleware->alias([
+            'iot.auth' => \App\Http\Middleware\VerifyIotApiKey::class,
+        ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
         //

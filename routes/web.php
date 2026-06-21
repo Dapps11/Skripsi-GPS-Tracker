@@ -31,13 +31,23 @@ Route::middleware('auth')->group(function () {
 
     // JSON polling endpoints
     Route::prefix('api/internal')->name('api.internal.')->group(function () {
-        Route::get('/fleet-summary',     [\App\Http\Controllers\ApiController::class, 'fleetSummary'])->name('fleet');
-        Route::get('/vehicles-position', [\App\Http\Controllers\ApiController::class, 'vehiclesPosition'])->name('positions');
-        Route::get('/trip/{vehicle}',    [\App\Http\Controllers\ApiController::class, 'tripDetail'])->name('trip');
-        Route::get('/alerts',            [\App\Http\Controllers\ApiController::class, 'alerts'])->name('alerts');
-        Route::post('/alerts/read-all',  [\App\Http\Controllers\ApiController::class, 'markAlertsRead'])->name('alerts.read');
-        Route::post('/alerts/{id}/read', [\App\Http\Controllers\ApiController::class, 'markAlertRead'])->name('alerts.read.one');
-        Route::get('/search',            [\App\Http\Controllers\ApiController::class, 'search'])->name('search');
+        Route::get('/fleet-summary',          [\App\Http\Controllers\ApiController::class, 'fleetSummary'])->name('fleet');
+        Route::get('/vehicles-position',      [\App\Http\Controllers\ApiController::class, 'vehiclesPosition'])->name('positions');
+        Route::get('/trip/{vehicle}',         [\App\Http\Controllers\ApiController::class, 'tripDetail'])->name('trip');
+        Route::get('/alerts',                 [\App\Http\Controllers\ApiController::class, 'alerts'])->name('alerts');
+        Route::post('/alerts/read-all',       [\App\Http\Controllers\ApiController::class, 'markAlertsRead'])->name('alerts.read');
+        Route::post('/alerts/{id}/read',      [\App\Http\Controllers\ApiController::class, 'markAlertRead'])->name('alerts.read.one');
+        Route::get('/search',                 [\App\Http\Controllers\ApiController::class, 'search'])->name('search');
+        Route::get('/vehicle-device/{vehicle}', function (\App\Models\Vehicle $vehicle) {
+            $device = \App\Models\IotDevice::where('vehicle_id', $vehicle->id)
+                                        ->whereNull('deleted_at')
+                                        ->with('driver')
+                                        ->first();
+            return response()->json([
+                'device' => $device,
+                'driver' => $device?->driver,
+            ]);
+        })->name('vehicle.device');
     });
 
     // GPS Tester — hanya untuk development
@@ -59,16 +69,5 @@ Route::middleware('auth')->group(function () {
     Route::resource('trips', TripController::class);
     Route::post('trips/{trip}/start',    [TripController::class, 'start'])->name('trips.start');
     Route::post('trips/{trip}/complete', [TripController::class, 'complete'])->name('trips.complete');
-
-    Route::get('/api/internal/vehicle-device/{vehicle}', function (\App\Models\Vehicle $vehicle) {
-        $device = \App\Models\IotDevice::where('vehicle_id', $vehicle->id)
-                                    ->whereNull('deleted_at')
-                                    ->with('driver')
-                                    ->first();
-        return response()->json([
-            'device' => $device,
-            'driver' => $device?->driver,
-        ]);
-    })->middleware('auth');
 
 });

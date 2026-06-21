@@ -198,8 +198,8 @@
             Devices
         </a>
 
+        @if(app()->isLocal() || app()->environment('testing'))
         <div class="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-2 mt-4">Tools</div>
-
         <a href="/gps-tester"
            class="sidebar-link {{ request()->is('gps-tester') ? 'active' : '' }}">
             <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
@@ -208,6 +208,7 @@
             </svg>
             GPS Tester
         </a>
+        @endif
     </nav>
 
     {{-- Fleet Stats --}}

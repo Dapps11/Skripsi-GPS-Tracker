@@ -30,7 +30,7 @@ class VehicleMasterController extends Controller
             'model'           => 'nullable|string|max:50',
             'year'            => 'nullable|integer|min:2000|max:2030',
             'color'           => 'nullable|string|max:30',
-            // 'capacity_liters' => 'nullable|numeric',
+            'capacity_liters' => 'nullable|numeric|min:0',
             'status'          => 'required|in:moving,idle,offline',
             'notes'           => 'nullable|string',
         ]);
@@ -57,7 +57,7 @@ class VehicleMasterController extends Controller
             'model'           => 'nullable|string|max:50',
             'year'            => 'nullable|integer|min:1990|max:2030',
             'color'           => 'nullable|string|max:30',
-            // 'capacity_liters' => 'nullable|numeric',
+            'capacity_liters' => 'nullable|numeric|min:0',
             'status'          => 'required|in:moving,idle,offline',
             'notes'           => 'nullable|string',
         ]);
