@@ -235,6 +235,19 @@ class ApiController extends Controller
         );
     }
 
+    public function alertsUnreadCount()
+    {
+        try {
+            // Hitung jumlah alert yang is_read = false
+            $count = Alert::where('is_read', false)->count();
+
+            return response()->json(['count' => $count]);
+        } catch (\Exception $e) {
+            \Illuminate\Support\Facades\Log::error('Error unread count: ' . $e->getMessage());
+            return response()->json(['count' => 0], 200);
+        }
+    }
+
     public function markAlertRead($id)
     {
         Alert::where('id', $id)->update([

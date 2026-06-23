@@ -14,11 +14,8 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    {{-- Tailwind CDN --}}
-    <script src="https://cdn.tailwindcss.com"></script>
-
     {{-- Vite — Echo + pusher-js --}}
-    @vite(['resources/js/app.js'])
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
 
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
