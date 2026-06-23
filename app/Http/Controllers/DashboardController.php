@@ -58,7 +58,7 @@ class DashboardController extends Controller
         $chartKm     = [];
         for ($i = 6; $i >= 0; $i--) {
             $d   = $now->copy()->subDays($i)->format('Y-m-d');
-            $lbl = $now->copy()->subDays($i)->locale('id')->isoFormat('dd D/M');
+            $lbl = $now->copy()->subDays($i)->locale('id')->isoFormat('dddd, D/M');
             $chartDays[]  = $lbl;
             $chartTrips[] = $tripsByDay->has($d) ? (int) $tripsByDay[$d]->count : 0;
             $chartKm[]    = $tripsByDay->has($d) ? round($tripsByDay[$d]->km ?? 0, 1) : 0;
@@ -119,13 +119,12 @@ class DashboardController extends Controller
                             ->count(),
         ];
 
-        // ── SIM supir mau expired (< 60 hari) ────────────────────────────
+        // ── SIM supir mau expired (≤ 60 hari) atau sudah expired ────────
         $expiringDrivers = Driver::whereNull('deleted_at')
             ->whereNotNull('license_expiry')
-            ->whereDate('license_expiry', '>=', $now->toDateString())
             ->whereDate('license_expiry', '<=', $now->copy()->addDays(60)->toDateString())
             ->orderBy('license_expiry')
-            ->limit(5)
+            ->limit(8)
             ->get(['id', 'full_name', 'driver_code', 'license_expiry']);
 
         return view('dashboard.index', compact(

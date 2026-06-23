@@ -255,24 +255,45 @@
                 @endif
             </div>
 
-            {{-- SIM mau expired --}}
+            {{-- SIM mau expired / sudah expired --}}
             @if($expiringDrivers->count() > 0)
             <div class="card p-4">
                 <div class="section-label">
-                    ⚠️ SIM Mau Expired
+                    ⚠️ Status SIM Supir
                 </div>
                 @foreach($expiringDrivers as $d)
                 @php
-                    $daysLeft = now()->diffInDays(\Carbon\Carbon::parse($d->license_expiry));
-                    $color = $daysLeft <= 14 ? '#dc2626' : '#f97316';
+                    $expiry   = \Carbon\Carbon::parse($d->license_expiry);
+                    $isExpired = $expiry->isPast();
+                    $daysLeft  = (int) abs(now()->diffInDays($expiry));
+                    if ($isExpired) {
+                        $color     = '#dc2626';
+                        $label     = "Sudah expired {$daysLeft} hari lalu";
+                        $badgeBg   = '#fee2e2';
+                        $badgeText = '#b91c1c';
+                        $badgeLabel = 'EXPIRED';
+                    } elseif ($daysLeft <= 14) {
+                        $color     = '#dc2626';
+                        $label     = "{$daysLeft} hari lagi";
+                        $badgeBg   = '#fee2e2';
+                        $badgeText = '#b91c1c';
+                        $badgeLabel = 'KRITIS';
+                    } else {
+                        $color     = '#f97316';
+                        $label     = "{$daysLeft} hari lagi";
+                        $badgeBg   = '#fff7ed';
+                        $badgeText = '#c2410c';
+                        $badgeLabel = 'SEGERA';
+                    }
                 @endphp
                 <div class="row-item">
                     <div style="flex:1;min-width:0;">
                         <div style="font-size:12px;font-weight:600;color:#111827;">{{ $d->full_name }}</div>
-                        <div style="font-size:10px;color:#9ca3af;">{{ $d->driver_code }}</div>
+                        <div style="font-size:10px;color:#9ca3af;">{{ $d->driver_code }} · Exp: {{ $expiry->format('d/m/Y') }}</div>
                     </div>
-                    <div style="font-size:11px;font-weight:700;color:{{ $color }};flex-shrink:0;">
-                        {{ $daysLeft }}h lagi
+                    <div style="text-align:right;flex-shrink:0;">
+                        <div style="display:inline-block;padding:2px 7px;background:{{ $badgeBg }};color:{{ $badgeText }};border-radius:99px;font-size:9px;font-weight:700;margin-bottom:2px;">{{ $badgeLabel }}</div>
+                        <div style="font-size:10px;font-weight:600;color:{{ $color }};">{{ $label }}</div>
                     </div>
                 </div>
                 @endforeach

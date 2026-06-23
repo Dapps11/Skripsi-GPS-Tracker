@@ -35,6 +35,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/vehicles-position',      [\App\Http\Controllers\ApiController::class, 'vehiclesPosition'])->name('positions');
         Route::get('/trip/{vehicle}',         [\App\Http\Controllers\ApiController::class, 'tripDetail'])->name('trip');
         Route::get('/alerts',                 [\App\Http\Controllers\ApiController::class, 'alerts'])->name('alerts');
+        Route::get('/alerts/unread-count',    [\App\Http\Controllers\ApiController::class, 'alertsUnreadCount'])->name('alerts.unread');
         Route::post('/alerts/read-all',       [\App\Http\Controllers\ApiController::class, 'markAlertsRead'])->name('alerts.read');
         Route::post('/alerts/{id}/read',      [\App\Http\Controllers\ApiController::class, 'markAlertRead'])->name('alerts.read.one');
         Route::get('/search',                 [\App\Http\Controllers\ApiController::class, 'search'])->name('search');

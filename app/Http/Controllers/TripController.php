@@ -158,9 +158,15 @@ class TripController extends Controller
         // Deteksi titik-titik berhenti (stop events) — pakai data mentah dulu
         $stops = $this->detectStops($gpsPoints);
 
-        // Bersihkan/smoothing jalur sebelum digambar di peta —
-        // supaya "jitter" GPS saat diam tidak digambar sebagai belokan aneh
-        $gpsPointsForMap = $this->smoothTrack($gpsPoints);
+        // Bersihkan/smoothing jalur + deteksi gap sinyal
+        $smoothed        = $this->smoothTrack($gpsPoints);
+        $gpsSegments     = $smoothed['segments'];  // array of segment (tiap segment = array titik)
+        $signalGaps      = $smoothed['gaps'];      // titik gap di mana sinyal terputus
+
+        // Flatten semua segmen untuk backward compat (stats, bounds, timeline)
+        $gpsPointsForMap = count($gpsSegments) > 0
+            ? array_merge(...$gpsSegments)
+            : [];
 
         // Transform untuk JS chart
         $monitoringForChart = $monitoringEvents->map(function($e) {
@@ -176,8 +182,9 @@ class TripController extends Controller
         });
 
         return view('trips.show', compact(
-            'trip', 'gpsPoints', 'gpsPointsForMap', 'mapType', 'googleMapsKey',
-            'etaHaversine', 'stops', 'monitoringEvents', 'monitoringForChart'
+            'trip', 'gpsPoints', 'gpsPointsForMap', 'gpsSegments', 'signalGaps',
+            'mapType', 'googleMapsKey', 'etaHaversine', 'stops',
+            'monitoringEvents', 'monitoringForChart'
         ));
     }
 
@@ -192,47 +199,42 @@ class TripController extends Controller
      */
     private function smoothTrack($gpsPoints): array
     {
-        $MAX_REALISTIC_SPEED  = 150;  // km/h — di atas ini, titik dianggap outlier/error GPS
-        $STOP_SPEED_THRESHOLD = 2;    // km/h — sama dengan threshold di detectStops()
+        $MAX_REALISTIC_SPEED  = 150;  // km/h — di atas ini, titik dianggap outlier
+        $GAP_THRESHOLD_SEC    = 60;   // detik — jeda > 60 detik dianggap sinyal terputus
+        $STOP_SPEED_THRESHOLD = 2;    // km/h
         $STOP_MIN_DURATION    = 1;    // menit
 
         $points = $gpsPoints->values();
         $total  = $points->count();
 
         if ($total === 0) {
-            return [];
+            return ['segments' => [], 'gaps' => []];
         }
 
-        // ── Tahap 1: buang outlier berdasarkan kecepatan implisit antar titik ──
+        // ── Tahap 1: buang outlier kecepatan tidak masuk akal ──────────
         $clean = [$points[0]];
         for ($i = 1; $i < $total; $i++) {
             $prev = $clean[count($clean) - 1];
             $curr = $points[$i];
 
-            $distKm = $this->haversine(
+            $distKm    = $this->haversine(
                 $prev->latitude, $prev->longitude,
                 $curr->latitude, $curr->longitude
             );
-            $timeHours = abs(
-                \Carbon\Carbon::parse($curr->gps_timestamp)
-                    ->diffInSeconds(\Carbon\Carbon::parse($prev->gps_timestamp))
-            ) / 3600;
-
-            // Hindari pembagian dengan nol — kalau selisih waktu hampir 0 tapi jarak besar, anggap outlier
+            $timeSec   = abs(\Carbon\Carbon::parse($curr->gps_timestamp)
+                            ->diffInSeconds(\Carbon\Carbon::parse($prev->gps_timestamp)));
+            $timeHours = $timeSec / 3600;
             $impliedSpeed = $timeHours > 0 ? ($distKm / $timeHours) : ($distKm > 0.05 ? 9999 : 0);
 
-            if ($impliedSpeed > $MAX_REALISTIC_SPEED) {
-                // Lompatan tidak masuk akal → skip titik ini, jangan jadikan referensi "prev" berikutnya
-                continue;
-            }
+            if ($impliedSpeed > $MAX_REALISTIC_SPEED) continue;
 
             $clean[] = $curr;
         }
 
-        // ── Tahap 2: collapse segmen diam jadi 1 titik representatif ───────────
+        // ── Tahap 2: collapse segmen diam ──────────────────────────────
         $cleanCount = count($clean);
-        $result     = [];
-        $i          = 0;
+        $flattened  = [];
+        $i = 0;
 
         while ($i < $cleanCount) {
             $pt = $clean[$i];
@@ -244,31 +246,25 @@ class TripController extends Controller
                     $j++;
                 }
                 $segEnd = $j;
-
                 $startTime = \Carbon\Carbon::parse($clean[$segStart]->gps_timestamp);
                 $endTime   = \Carbon\Carbon::parse($clean[$segEnd]->gps_timestamp);
                 $durationMinutes = $startTime->diffInSeconds($endTime) / 60;
 
                 if ($durationMinutes >= $STOP_MIN_DURATION && $segEnd > $segStart) {
-                    // Segmen diam yang signifikan → ambil 1 titik representatif (tengah segmen)
-                    // supaya tidak digambar sebagai jalur belok-belok/jitter
-                    $midIdx = $segStart + intdiv($segEnd - $segStart, 2);
-                    $midPt  = $clean[$midIdx];
-
-                    $result[] = [
+                    $midIdx   = $segStart + intdiv($segEnd - $segStart, 2);
+                    $midPt    = $clean[$midIdx];
+                    $flattened[] = [
                         'latitude'      => $midPt->latitude,
                         'longitude'     => $midPt->longitude,
                         'speed_kmh'     => $midPt->speed_kmh,
                         'gps_timestamp' => $midPt->gps_timestamp,
                     ];
-
                     $i = $segEnd + 1;
                     continue;
                 }
-                // Kalau durasi diam singkat (bukan stop signifikan), tetap masukkan apa adanya
             }
 
-            $result[] = [
+            $flattened[] = [
                 'latitude'      => $pt->latitude,
                 'longitude'     => $pt->longitude,
                 'speed_kmh'     => $pt->speed_kmh,
@@ -277,7 +273,60 @@ class TripController extends Controller
             $i++;
         }
 
-        return $result;
+        // ── Tahap 3: split jadi segmen terpisah saat ada gap > threshold ─
+        $segments = [];
+        $gaps     = [];
+        $curSeg   = [];
+
+        $flatTotal = count($flattened);
+        for ($i = 0; $i < $flatTotal; $i++) {
+            $pt = $flattened[$i];
+
+            if (empty($curSeg)) {
+                $curSeg[] = $pt;
+                continue;
+            }
+
+            $prev    = end($curSeg);
+            $timeSec = abs(\Carbon\Carbon::parse($pt['gps_timestamp'])
+                            ->diffInSeconds(\Carbon\Carbon::parse($prev['gps_timestamp'])));
+
+            if ($timeSec > $GAP_THRESHOLD_SEC) {
+                // Simpan segmen saat ini
+                $segments[] = $curSeg;
+
+                // Catat gap event — posisi midpoint antara 2 titik
+                $gapDurSec = $timeSec;
+                $gapMin    = intdiv($gapDurSec, 60);
+                $gapSec    = $gapDurSec % 60;
+                $gapLabel  = $gapMin > 0
+                    ? ($gapSec > 0 ? "{$gapMin} mnt {$gapSec} dtk" : "{$gapMin} mnt")
+                    : "{$gapSec} dtk";
+
+                $gaps[] = [
+                    'lat'         => ($prev['latitude']  + $pt['latitude'])  / 2,
+                    'lng'         => ($prev['longitude'] + $pt['longitude']) / 2,
+                    'duration_sec' => $gapDurSec,
+                    'duration_label' => $gapLabel,
+                    'from_time'   => \Carbon\Carbon::parse($prev['gps_timestamp'])
+                                        ->setTimezone('Asia/Jakarta')->format('H:i:s'),
+                    'to_time'     => \Carbon\Carbon::parse($pt['gps_timestamp'])
+                                        ->setTimezone('Asia/Jakarta')->format('H:i:s'),
+                ];
+
+                // Mulai segmen baru
+                $curSeg = [$pt];
+            } else {
+                $curSeg[] = $pt;
+            }
+        }
+
+        // Tambahkan segmen terakhir
+        if (!empty($curSeg)) {
+            $segments[] = $curSeg;
+        }
+
+        return ['segments' => $segments, 'gaps' => $gaps];
     }
 
     /**
@@ -441,6 +490,32 @@ class TripController extends Controller
             'arrived_at' => now(),
         ]);
 
+        // Broadcast trip status update → WS indicator update di frontend
+        broadcast(new \App\Events\TripStatusUpdated(
+            $trip->vehicle_id,
+            [
+                'trip_id'    => $trip->id,
+                'trip_code'  => $trip->trip_code,
+                'status'     => 'completed',
+                'arrived_at' => $trip->arrived_at,
+            ]
+        ))->toOthers();
+
+        // Buat alert notifikasi trip selesai
+        \App\Models\Alert::create([
+            'alert_type'   => 'trip_completed',
+            'severity'     => 'info',
+            'vehicle_id'   => $trip->vehicle_id,
+            'driver_id'    => $trip->driver_id,
+            'trip_id'      => $trip->id,
+            'title'        => "Trip Selesai — {$trip->trip_code}",
+            'message'      => "Kendaraan tiba di {$trip->dest_name}. " .
+                              ($trip->total_distance_km
+                                  ? number_format($trip->total_distance_km, 1) . " km ditempuh."
+                                  : ''),
+            'triggered_at' => now(),
+        ]);
+
         return back()->with('success', "Trip {$trip->trip_code} ditandai selesai.");
     }
     
@@ -458,6 +533,17 @@ class TripController extends Controller
             'status'      => 'in_progress',
             'departed_at' => now(),
         ]);
+
+        // Broadcast trip status update
+        broadcast(new \App\Events\TripStatusUpdated(
+            $trip->vehicle_id,
+            [
+                'trip_id'     => $trip->id,
+                'trip_code'   => $trip->trip_code,
+                'status'      => 'in_progress',
+                'departed_at' => $trip->departed_at,
+            ]
+        ))->toOthers();
 
         return back()->with('success', "Trip {$trip->trip_code} dimulai.");
     }

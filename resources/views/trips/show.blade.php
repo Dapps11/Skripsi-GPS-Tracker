@@ -32,6 +32,14 @@
     .stop-bubble-tooltip::before {
         border-top-color: #dc2626 !important;
     }
+    /* Bubble gap sinyal terputus */
+    .gap-bubble-tooltip {
+        border-color: #7c3aed !important;
+        box-shadow: 0 2px 8px rgba(124,58,237,.25) !important;
+    }
+    .gap-bubble-tooltip::before {
+        border-top-color: #7c3aed !important;
+    }
 </style>
 @endpush
 
@@ -226,6 +234,23 @@
                     @endif
                 </div>
 
+                @if(count($signalGaps) > 0)
+                <div class="stat-box" style="border:1px solid #ede9fe;background:#faf5ff;">
+                    <div class="stat-label" style="color:#7c3aed;">📡 Sinyal Terputus</div>
+                    <div class="stat-value" style="color:#7c3aed;">
+                        {{ count($signalGaps) }}
+                        <span class="stat-unit">kali</span>
+                    </div>
+                    @php
+                        $totalGapSec = collect($signalGaps)->sum('duration_sec');
+                        $gMin = intdiv($totalGapSec, 60);
+                        $gSec = $totalGapSec % 60;
+                        $totalGapLabel = $gMin > 0 ? "{$gMin}m {$gSec}d" : "{$gSec}d";
+                    @endphp
+                    <div style="font-size:10px;color:#9ca3af;margin-top:2px;">total {{ $totalGapLabel }} tanpa sinyal</div>
+                </div>
+                @endif
+
                 <div class="stat-box">
                     <div class="stat-label">Device</div>
                     <div style="font-size:11px;font-weight:700;color:#111827;margin-top:4px;word-break:break-all;">
@@ -296,6 +321,12 @@
                 <div class="legend-item">
                     <div class="legend-dot" style="background:#dc2626;box-shadow:0 0 0 2px #dc262655;"></div>
                     <span>Titik Berhenti ({{ count($stops) }})</span>
+                </div>
+                @endif
+                @if(count($signalGaps) > 0)
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#7c3aed;box-shadow:0 0 0 2px #7c3aed55;"></div>
+                    <span style="color:#7c3aed;font-weight:600;">Sinyal Terputus ({{ count($signalGaps) }})</span>
                 </div>
                 @endif
             </div>
@@ -515,6 +546,8 @@ window.__tripshow = {
     gpsPointsRaw:     @json($gpsPoints),
     trip:             @json($trip),
     stopEvents:       @json($stops),
+    gpsSegments:      @json($gpsSegments),
+    signalGaps:       @json($signalGaps),
     monitoringEvents: @json($monitoringForChart),
 };
 </script>

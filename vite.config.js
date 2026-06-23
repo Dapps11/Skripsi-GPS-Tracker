@@ -8,4 +8,10 @@ export default defineConfig({
             refresh: true,
         }),
     ],
+    server: {
+        // Ini kunci agar Vite bisa diakses via Ngrok
+        hmr: {
+            host: 'unhabitual-nonenigmatically-xochitl.ngrok-free.dev', 
+        },
+    },
 });

@@ -184,13 +184,23 @@ class ApiController extends Controller
 
     public function alerts()
     {
+        // Ambil semua alert 30 hari terakhir (read + unread), diurutkan terbaru
         return response()->json(
-            Alert::where('is_read', false)
-                 ->with(['vehicle', 'driver'])
+            Alert::where('triggered_at', '>=', now()->subDays(30))
+                 ->with(['vehicle:id,name,license_plate', 'driver:id,full_name'])
                  ->orderByDesc('triggered_at')
-                 ->take(20)
-                 ->get()
+                 ->take(100)
+                 ->get(['id', 'alert_type', 'severity', 'title', 'message',
+                        'is_read', 'triggered_at', 'vehicle_id', 'driver_id', 'trip_id'])
         );
+    }
+
+    public function alertsUnreadCount()
+    {
+        $count = Alert::where('is_read', false)
+                      ->where('triggered_at', '>=', now()->subDays(30))
+                      ->count();
+        return response()->json(['count' => $count]);
     }
 
     public function search(Request $request)
