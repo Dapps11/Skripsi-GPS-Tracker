@@ -47,7 +47,7 @@ class IoTApiController extends Controller
         $vehicleStatus = $isMoving ? 'moving' : 'idle';
 
         // Simpan GPS
-        GpsTelemetry::create([
+        $telemetry = GpsTelemetry::create([
             'device_id'     => $device->id,
             'vehicle_id'    => $device->vehicle_id,
             'latitude'      => $data['latitude'],
@@ -86,7 +86,8 @@ class IoTApiController extends Controller
                 $data['latitude'],
                 $data['longitude'],
                 $data['speed_kmh'],
-                $isMoving
+                $isMoving,
+                $telemetry
             );
         }
 
@@ -151,11 +152,16 @@ class IoTApiController extends Controller
         float $lat,
         float $lng,
         float $speed,
-        bool $isMoving
+        bool $isMoving,
+        ?GpsTelemetry $telemetry = null
     ): ?Trip {
+        // Urutkan berdasarkan departed_at (bukan created_at) supaya kalau
+        // ada lebih dari satu trip 'in_progress' untuk kendaraan yang sama
+        // (misal trip lama tidak ditutup dengan benar), yang dianggap aktif
+        // adalah trip yang paling baru BERANGKAT.
         $activeTrip = Trip::where('vehicle_id', $device->vehicle_id)
                           ->where('status', 'in_progress')
-                          ->latest()->first();
+                          ->latest('departed_at')->first();
 
         if (!$activeTrip && $isMoving) {
             $plannedTrip = Trip::where('vehicle_id', $device->vehicle_id)
@@ -183,12 +189,15 @@ class IoTApiController extends Controller
 
         if (!$activeTrip) return null;
 
-        // Assign trip_id ke GPS point terakhir
-        GpsTelemetry::where('device_id', $device->id)
-                     ->whereNull('trip_id')
-                     ->latest('recorded_at')
-                     ->limit(1)
-                     ->update(['trip_id' => $activeTrip->id]);
+        // Tag trip_id langsung ke record GPS yang baru dibuat di request ini
+        // (by ID), bukan mencari "record terbaru yang trip_id-nya NULL" secara
+        // global. Cara lama itu rawan salah tag: kalau ada backlog record lama
+        // yang trip_id-nya masih NULL (misal dari saat kendaraan idle/tidak
+        // ada trip aktif), atau dua request datang nyaris bersamaan, record
+        // yang ditag bisa jadi bukan yang seharusnya.
+        if ($telemetry && !$telemetry->trip_id) {
+            $telemetry->update(['trip_id' => $activeTrip->id]);
+        }
 
         // Cek arrival
         $distToDest = $this->haversine($lat, $lng, $activeTrip->dest_lat, $activeTrip->dest_lng);

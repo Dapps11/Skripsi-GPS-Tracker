@@ -43,9 +43,25 @@ class LiveMapController extends Controller
                 ->first();
         }
 
-        $gpsPoints = DB::table('gps_telemetry')
-                       ->where('vehicle_id', $vehicle->id)
-                       ->orderBy('gps_timestamp')
+        // Batasi track GPS ke jendela waktu trip yang sedang ditampilkan saja
+        // (trip aktif, atau trip terakhir yang selesai). Tanpa batasan ini,
+        // semua histori GPS kendaraan sepanjang masa akan tercampur jadi satu
+        // jalur, termasuk milik trip-trip lain.
+        $relevantTrip = $trip ?? $lastTrip;
+
+        $gpsQuery = DB::table('gps_telemetry')->where('vehicle_id', $vehicle->id);
+
+        if ($relevantTrip && $relevantTrip->departed_at) {
+            $gpsQuery->where('gps_timestamp', '>=', $relevantTrip->departed_at);
+            if ($relevantTrip->arrived_at) {
+                $gpsQuery->where('gps_timestamp', '<=', $relevantTrip->arrived_at);
+            }
+        } else {
+            // Belum ada trip yang berangkat — tampilkan saja posisi 24 jam terakhir
+            $gpsQuery->where('gps_timestamp', '>=', now()->subHours(24));
+        }
+
+        $gpsPoints = $gpsQuery->orderBy('gps_timestamp')
                        ->get(['latitude', 'longitude', 'speed_kmh', 'gps_timestamp']);
 
         $latestDriverStatus = DB::table('driver_monitoring_events')

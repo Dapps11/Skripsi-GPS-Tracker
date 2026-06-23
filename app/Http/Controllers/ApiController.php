@@ -26,22 +26,30 @@ class ApiController extends Controller
 
     public function tripDetail(\App\Models\Vehicle $vehicle)
     {
-        // Ambil trip aktif atau completed terakhir
+        // Hanya trip yang BENAR-BENAR sedang berjalan (in_progress) yang
+        // dianggap "trip aktif" di sini. Sebelumnya status 'completed' juga
+        // ikut di-match dan dipilih berdasarkan updated_at terbaru — akibatnya
+        // begitu sebuah trip baru dibuat (masih 'planned'), endpoint ini tetap
+        // mengembalikan data trip LAMA yang sudah selesai, karena trip baru
+        // belum masuk filter status. Dengan hanya mengizinkan 'in_progress',
+        // trip yang sudah selesai tidak lagi "nyangkut" jadi trip aktif.
         $trip = DB::table('trips')
                 ->where('vehicle_id', $vehicle->id)
-                ->whereIn('status', ['in_progress', 'completed'])
-                ->orderByDesc('updated_at')
+                ->where('status', 'in_progress')
+                ->orderByDesc('departed_at')
                 ->first();
 
-        $fromTime = $trip && $trip->departed_at
-            ? $trip->departed_at
-            : now()->subHours(24)->toDateTimeString();
-
-        $gpsTrack = DB::table('gps_telemetry')
-                    ->where('vehicle_id', $vehicle->id)
-                    ->where('gps_timestamp', '>=', $fromTime)
-                    ->orderBy('gps_timestamp')
-                    ->get(['latitude', 'longitude', 'speed_kmh', 'gps_timestamp']);
+        $gpsTrack = collect();
+        if ($trip && $trip->departed_at) {
+            // Trip ini masih berjalan, jadi cukup batasi dari departed_at —
+            // tidak akan menyentuh data milik trip lain karena trip lain
+            // (completed/planned) tidak pernah lolos filter status di atas.
+            $gpsTrack = DB::table('gps_telemetry')
+                        ->where('vehicle_id', $vehicle->id)
+                        ->where('gps_timestamp', '>=', $trip->departed_at)
+                        ->orderBy('gps_timestamp')
+                        ->get(['latitude', 'longitude', 'speed_kmh', 'gps_timestamp']);
+        }
 
         $lastGps      = $gpsTrack->last();
         $currentSpeed = $lastGps ? (int) round($lastGps->speed_kmh) : 0;
@@ -184,23 +192,13 @@ class ApiController extends Controller
 
     public function alerts()
     {
-        // Ambil semua alert 30 hari terakhir (read + unread), diurutkan terbaru
         return response()->json(
-            Alert::where('triggered_at', '>=', now()->subDays(30))
-                 ->with(['vehicle:id,name,license_plate', 'driver:id,full_name'])
+            Alert::where('is_read', false)
+                 ->with(['vehicle', 'driver'])
                  ->orderByDesc('triggered_at')
-                 ->take(100)
-                 ->get(['id', 'alert_type', 'severity', 'title', 'message',
-                        'is_read', 'triggered_at', 'vehicle_id', 'driver_id', 'trip_id'])
+                 ->take(20)
+                 ->get()
         );
-    }
-
-    public function alertsUnreadCount()
-    {
-        $count = Alert::where('is_read', false)
-                      ->where('triggered_at', '>=', now()->subDays(30))
-                      ->count();
-        return response()->json(['count' => $count]);
     }
 
     public function search(Request $request)
