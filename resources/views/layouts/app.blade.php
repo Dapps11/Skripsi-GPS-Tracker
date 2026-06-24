@@ -89,7 +89,7 @@
             }
 
             /* Tabel responsive — scroll horizontal di mobile */
-            .table-responsive { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+            .table-responsive { overflow-x: auto; overflow-y: hidden; -webkit-overflow-scrolling: touch; }
             .table-responsive table { min-width: 600px; }
 
             /* Card padding lebih kecil di mobile */
