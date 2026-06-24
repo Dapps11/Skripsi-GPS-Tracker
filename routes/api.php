@@ -21,7 +21,7 @@ Route::middleware('iot.auth')->group(function () {
     // SIM7600 — kirim data GPS
     Route::post('/telemetry', [IoTApiController::class, 'receiveTelemetry']);
 
-    // OpenMV — kirim event kantuk
+    //  — kirim event kantuk
     Route::post('/drowsy', [IoTApiController::class, 'receiveDrowsy']);
 });
 

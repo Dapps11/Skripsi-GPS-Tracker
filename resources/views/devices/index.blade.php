@@ -7,7 +7,7 @@
     <div class="flex items-start justify-between mb-4 md:mb-6 gap-3">
         <div>
             <h1 class="text-xl md:text-2xl font-extrabold text-gray-900">Fleet Asset Inventory</h1>
-            <p class="text-xs md:text-sm text-gray-400 mt-1">Monitoring device SIM7600 & OpenMV.</p>
+            <p class="text-xs md:text-sm text-gray-400 mt-1">Monitoring device SIM7600G & Raspberry Pi 5.</p>
         </div>
         <a href="{{ route('devices.create') }}"
            class="flex items-center gap-2 px-3 md:px-4 py-2 md:py-2.5 bg-green-500 hover:bg-green-600 text-white text-sm font-bold rounded-xl transition-all shadow-md flex-shrink-0">

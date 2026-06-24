@@ -4,11 +4,16 @@
 @push('styles')
 <style>
     #origin-map, #dest-map {
-        height: 220px;
+        height: 280px;
         border-radius: 12px;
         border: 1.5px solid #e5e7eb;
         cursor: crosshair;
         z-index: 0;
+    }
+    @media (min-width: 768px) {
+        #origin-map, #dest-map {
+            height: 380px;
+        }
     }
     .coord-badge {
         display: inline-flex; align-items: center; gap: 6px;
