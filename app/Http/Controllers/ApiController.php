@@ -116,6 +116,10 @@ class ApiController extends Controller
             );
 
             $distM = round($distNow * 1000, 0);
+
+            // ── Catat snapshot ETA buat analisis akurasi nanti ────────
+            $this->logEtaSnapshot($trip->id, 'realtime_haversine', $realtimeMin);
+            $this->logEtaSnapshot($trip->id, 'realtime_google_traffic', $realtimeGoogle);
         }
 
         // ── ETA initial haversine ────────────────────────────────────
@@ -264,5 +268,31 @@ class ApiController extends Controller
             'read_at' => now(),
         ]);
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * Catat snapshot ETA, di-throttle max 1x per 5 menit per trip+method,
+     * biar tabel gak banjir dari polling live map yang sering.
+     */
+    private function logEtaSnapshot(int $tripId, string $method, ?int $minutesFromNow): void
+    {
+        if ($minutesFromNow === null) return;
+
+        $lastLog = DB::table('trip_eta_logs')
+                    ->where('trip_id', $tripId)
+                    ->where('method', $method)
+                    ->orderByDesc('logged_at')
+                    ->first();
+
+        if ($lastLog && now()->diffInMinutes($lastLog->logged_at) < 5) {
+            return; // belum 5 menit, skip
+        }
+
+        DB::table('trip_eta_logs')->insert([
+            'trip_id'              => $tripId,
+            'method'                => $method,
+            'predicted_arrival_at' => now()->addMinutes($minutesFromNow),
+            'logged_at'             => now(),
+        ]);
     }
 }
