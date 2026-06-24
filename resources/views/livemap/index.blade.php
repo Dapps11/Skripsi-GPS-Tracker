@@ -9,17 +9,17 @@
 
     .detail-panel {
         position:absolute; top:16px; right:16px;
-        width:400px; height:min(620px, calc(100vh - 3.5rem - 32px));
+        width:400px; max-height: 60vh;
         background:white; border-radius:1.25rem;
         box-shadow:0 12px 40px rgba(0,0,0,.15),0 2px 8px rgba(0,0,0,.08);
         border:1px solid #f1f5f9; z-index:1000;
         transition:width .35s cubic-bezier(.4,0,.2,1),
-                   height .35s cubic-bezier(.4,0,.2,1),
+                   max-height .35s cubic-bezier(.4,0,.2,1),
                    border-radius .35s cubic-bezier(.4,0,.2,1);
         display:flex; flex-direction:column; overflow:hidden;
     }
     .detail-panel.minimized {
-        width:60px !important; height:60px !important;
+        width:60px !important; max-height:60px !important;
         border-radius:1rem !important; cursor:pointer;
     }
     .detail-panel.minimized .panel-content { opacity:0; pointer-events:none; }
