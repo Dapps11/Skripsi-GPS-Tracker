@@ -234,7 +234,7 @@
                     @endif
                 </div>
 
-                @if(count($signalGaps) > 0)
+                @if(!empty($signalGaps))
                 <div class="stat-box" style="border:1px solid #ede9fe;background:#faf5ff;">
                     <div class="stat-label" style="color:#7c3aed;">📡 Sinyal Terputus</div>
                     <div class="stat-value" style="color:#7c3aed;">
@@ -323,7 +323,7 @@
                     <span>Titik Berhenti ({{ count($stops) }})</span>
                 </div>
                 @endif
-                @if(count($signalGaps) > 0)
+                @if(!empty($signalGaps))
                 <div class="legend-item">
                     <div class="legend-dot" style="background:#7c3aed;box-shadow:0 0 0 2px #7c3aed55;"></div>
                     <span style="color:#7c3aed;font-weight:600;">Sinyal Terputus ({{ count($signalGaps) }})</span>
