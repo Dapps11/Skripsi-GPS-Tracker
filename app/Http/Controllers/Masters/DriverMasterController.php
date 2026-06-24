@@ -16,13 +16,14 @@ class DriverMasterController extends Controller
 
     public function create()
     {
-        return view('masters.drivers.create');
+        $nextDriverCode = $this->nextDriverCode();
+
+        return view('masters.drivers.create', compact('nextDriverCode'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'driver_code'    => 'required|string|max:30|unique:drivers',
             'full_name'      => 'required|string|max:100',
             'phone'          => 'nullable|string|max:20',
             'license_number' => 'nullable|string|max:50',
@@ -32,10 +33,32 @@ class DriverMasterController extends Controller
             'notes'          => 'nullable|string',
         ]);
 
+        // driver_code digenerate otomatis di server, retry kalau kebetulan bentrok
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $validated['driver_code'] = $this->nextDriverCode();
+            if (! Driver::where('driver_code', $validated['driver_code'])->exists()) {
+                break;
+            }
+        }
+
         Driver::create($validated);
 
         return redirect()->route('master.drivers.index')
-                         ->with('success', 'Supir berhasil ditambahkan.');
+                         ->with('success', 'Supir berhasil ditambahkan dengan kode ' . $validated['driver_code'] . '.');
+    }
+
+    private function nextDriverCode(): string
+    {
+        $prefix = 'DRV-';
+
+        $lastNumber = Driver::where('driver_code', 'like', $prefix . '%')
+            ->pluck('driver_code')
+            ->map(function ($code) use ($prefix) {
+                return preg_match('/^' . preg_quote($prefix, '/') . '(\d+)$/', $code, $m) ? (int) $m[1] : 0;
+            })
+            ->max() ?? 0;
+
+        return $prefix . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
     }
 
     public function edit(Driver $driver)

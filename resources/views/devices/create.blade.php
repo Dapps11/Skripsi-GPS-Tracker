@@ -21,12 +21,16 @@
 
             <div class="mb-4">
                 <label class="block text-sm font-semibold text-gray-700 mb-1.5">
-                    Device ID <span class="text-red-400">*</span>
+                    Device ID
                 </label>
-                <input type="text" name="device_id" value="{{ old('device_id') }}"
-                       placeholder="GF-001, TRACKER-001..."
-                       class="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
-                @error('device_id') <p class="text-xs text-red-500 mt-1">{{ $message }}</p> @enderror
+                <div class="relative">
+                    <input type="text" value="{{ $nextDeviceId }}" readonly tabindex="-1"
+                           class="w-full pl-4 pr-10 py-2.5 text-sm font-semibold border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed select-none">
+                    <svg class="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-12v3H8V7a4 4 0 118 0z"/>
+                    </svg>
+                </div>
+                <p class="text-xs text-gray-400 mt-1">Otomatis mengikuti ID terakhir di database — tidak bisa diubah manual.</p>
             </div>
 
             <div class="grid grid-cols-2 gap-4 mb-4">

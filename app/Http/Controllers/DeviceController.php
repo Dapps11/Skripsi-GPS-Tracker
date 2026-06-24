@@ -29,13 +29,14 @@ class DeviceController extends Controller
                           ->orderBy('full_name')
                           ->get();
 
-        return view('devices.create', compact('vehicles', 'drivers'));
+        $nextDeviceId = $this->nextDeviceId();
+
+        return view('devices.create', compact('vehicles', 'drivers', 'nextDeviceId'));
     }
 
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'device_id'        => 'required|string|max:50|unique:iot_devices,device_id',
             'vehicle_id'       => 'nullable|exists:vehicles,id',
             'driver_id'        => 'nullable|exists:drivers,id',
             'imei'             => 'nullable|string|max:20',
@@ -49,10 +50,33 @@ class DeviceController extends Controller
         ]);
 
         $validated['device_type'] = 'tracker'; // set otomatis
+
+        // device_id digenerate otomatis di server, retry kalau kebetulan bentrok (race condition)
+        for ($attempt = 0; $attempt < 5; $attempt++) {
+            $validated['device_id'] = $this->nextDeviceId();
+            if (! IotDevice::where('device_id', $validated['device_id'])->exists()) {
+                break;
+            }
+        }
+
         IotDevice::create($validated);
 
         return redirect()->route('devices.index')
-                        ->with('success', 'Device berhasil ditambahkan.');
+                        ->with('success', 'Device berhasil ditambahkan dengan ID ' . $validated['device_id'] . '.');
+    }
+
+    private function nextDeviceId(): string
+    {
+        $prefix = 'TRACKER-';
+
+        $lastNumber = IotDevice::where('device_id', 'like', $prefix . '%')
+            ->pluck('device_id')
+            ->map(function ($code) use ($prefix) {
+                return preg_match('/^' . preg_quote($prefix, '/') . '(\d+)$/', $code, $m) ? (int) $m[1] : 0;
+            })
+            ->max() ?? 0;
+
+        return $prefix . str_pad($lastNumber + 1, 3, '0', STR_PAD_LEFT);
     }
 
     public function edit(IotDevice $device)
