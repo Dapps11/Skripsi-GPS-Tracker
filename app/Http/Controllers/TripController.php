@@ -207,7 +207,7 @@ class TripController extends Controller
 
         return view('trips.show', compact(
             'trip', 'gpsPoints', 'gpsPointsForMap', 'mapType', 'googleMapsKey',
-            'etaHaversine', 'stops', 'monitoringEvents', 'monitoringForChart'
+            'etaHaversine', 'stops', 'monitoringEvents', 'monitoringForChart','gpsSegments'
         ));
     }
 
