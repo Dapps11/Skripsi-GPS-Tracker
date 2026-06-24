@@ -12,7 +12,7 @@
     }
     @media (min-width: 768px) {
         #origin-map, #dest-map {
-            height: 380px;
+            height: 460px;
         }
     }
     .coord-badge {
