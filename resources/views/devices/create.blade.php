@@ -77,12 +77,6 @@
 
             <div class="grid grid-cols-2 gap-4 mb-4">
                 <div>
-                    <label class="block text-sm font-semibold text-gray-700 mb-1.5">Firmware Version</label>
-                    <input type="text" name="firmware_version" value="{{ old('firmware_version') }}"
-                           placeholder="v1.0.0"
-                           class="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20">
-                </div>
-                <div>
                     <label class="block text-sm font-semibold text-gray-700 mb-1.5">Network Operator</label>
                     <input type="text" name="network_operator" value="{{ old('network_operator') }}"
                            placeholder="Telkomsel, Indosat..."

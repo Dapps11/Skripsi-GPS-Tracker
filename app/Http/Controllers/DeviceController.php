@@ -44,8 +44,6 @@ class DeviceController extends Controller
             'apn'              => 'nullable|string|max:100',
             'phone_number'     => 'nullable|string|max:20',
             'network_operator' => 'nullable|string|max:50',
-            'firmware_version' => 'nullable|string|max:20',
-            'ai_model_version' => 'nullable|string|max:50',
             'notes'            => 'nullable|string',
         ]);
 
@@ -99,8 +97,6 @@ class DeviceController extends Controller
             'apn'              => 'nullable|string|max:100',
             'phone_number'     => 'nullable|string|max:20',
             'network_operator' => 'nullable|string|max:50',
-            'firmware_version' => 'nullable|string|max:20',
-            'ai_model_version' => 'nullable|string|max:50',
             'notes'            => 'nullable|string',
         ]);
 
