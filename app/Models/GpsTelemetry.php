@@ -11,11 +11,10 @@ class GpsTelemetry extends Model
     protected $table = 'gps_telemetry';
 
     protected $fillable = [
-        'device_id', 'vehicle_id', 'trip_id',
-        'latitude', 'longitude', 'altitude',
-        'speed_kmh', 'heading', 'accuracy_m',
-        'satellites', 'gsm_signal', 'network_type',
-        'gps_timestamp', 'recorded_at',
+        'device_id', 'vehicle_id', 'trip_id', 'latitude', 'longitude', 
+        'speed_kmh', 'heading', 'gsm_signal', 'network_type', 
+        'gps_timestamp', 'recorded_at', 'accuracy_m',
+        'satellites', 'hdop', 'pdop', 'vdop', 'fix_mode'
     ];
 
     protected function casts(): array
