@@ -546,8 +546,8 @@ window.__tripshow = {
     gpsPointsRaw:     @json($gpsPoints),
     trip:             @json($trip),
     stopEvents:       @json($stops),
-    gpsSegments:      @json($gpsSegments),
-    signalGaps:       @json($signalGaps),
+    gpsSegments:      @json($gpsSegments ?? []),
+    signalGaps:       @json($signalGaps ?? []),
     monitoringEvents: @json($monitoringForChart),
 };
 </script>
