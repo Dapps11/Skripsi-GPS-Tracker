@@ -290,7 +290,7 @@ function doTextSearch(type, query) {
     if (!query.trim() || !window.google) return;
 
     const map     = type === 'origin' ? gOriginMap : gDestMap;
-    const svc     = new google.maps.places.Place(map);
+    const svc     = new google.maps.places.PlacesService(map);
     const results = document.getElementById(`${type}-results`);
 
     results.innerHTML = `<div class="search-result-item" style="color:#9ca3af;">🔍 Mencari...</div>`;
@@ -299,7 +299,7 @@ function doTextSearch(type, query) {
     svc.textSearch({ query, region: 'id' }, async (data, status) => {
         results.innerHTML = '';
 
-        if (status !== google.maps.places.PlaceStatus.OK || !data.length) {
+        if (status !== google.maps.places.PlacesServiceStatus.OK || !data.length) {
             results.innerHTML = `<div class="search-result-item" style="color:#9ca3af;">Tidak ditemukan.</div>`;
             return;
         }
@@ -390,10 +390,10 @@ async function doNominatimLiveSearch(type, q, resEl) {
 function doGoogleLiveSearch(type, q, resEl) {
     resEl.innerHTML = '<div class="search-result-item" style="color:#9ca3af;">🔍 Mencari...</div>';
     resEl.classList.remove('hidden');
-    const svc = new google.maps.places.Place(document.createElement('div'));
+    const svc = new google.maps.places.PlacesServicesService(document.createElement('div'));
     svc.textSearch({ query: q, region: 'id' }, async (results, status) => {
         resEl.innerHTML = '';
-        if (status !== google.maps.places.PlaceStatus.OK || !results.length) {
+        if (status !== google.maps.places.PlacesServicesServiceStatus.OK || !results.length) {
             resEl.innerHTML = '<div class="search-result-item" style="color:#9ca3af;">Tidak ditemukan.</div>';
             return;
         }

@@ -86,10 +86,10 @@ async function editNominatimLiveSearch(type, q, resEl) {
 function editGoogleLiveSearch(type, q, resEl) {
     resEl.innerHTML = '<div class="search-result-item" style="color:#9ca3af;">🔍 Mencari...</div>';
     resEl.classList.remove('hidden');
-    const svc = new google.maps.places.Place(document.createElement('div'));
+    const svc = new google.maps.places.PlacesServicesService(document.createElement('div'));
     svc.textSearch({ query: q, region: 'id' }, async (results, status) => {
         resEl.innerHTML = '';
-        if (status !== google.maps.places.PlaceStatus.OK || !results.length) {
+        if (status !== google.maps.places.PlacesServicesServiceStatus.OK || !results.length) {
             resEl.innerHTML = '<div class="search-result-item" style="color:#9ca3af;">Tidak ditemukan.</div>'; return;
         }
         results.slice(0, 6).forEach(place => {
