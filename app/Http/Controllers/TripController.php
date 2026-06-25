@@ -217,17 +217,25 @@ class TripController extends Controller
             $currentSegment[] = $point;
 
             if ($i < $pointCount - 1) {
-                $t1     = \Carbon\Carbon::parse($point['gps_timestamp']);
-                $t2     = \Carbon\Carbon::parse($gpsPointsForMap[$i + 1]['gps_timestamp']);
-                $gapSec = $t1->diffInSeconds($t2);
+                // gps_timestamp adalah Carbon object; app tz = Asia/Jakarta sehingga DB UTC
+                // harus di-parse ulang secara eksplisit sebagai UTC agar diffInSeconds benar
+                $rawTs1 = $point['gps_timestamp'];
+                $rawTs2 = $gpsPointsForMap[$i + 1]['gps_timestamp'];
+                $t1     = \Carbon\Carbon::parse(
+                    ($rawTs1 instanceof \Carbon\Carbon ? $rawTs1->format('Y-m-d H:i:s') : $rawTs1), 'UTC'
+                );
+                $t2     = \Carbon\Carbon::parse(
+                    ($rawTs2 instanceof \Carbon\Carbon ? $rawTs2->format('Y-m-d H:i:s') : $rawTs2), 'UTC'
+                );
+                $gapSec = abs($t1->diffInSeconds($t2));
 
                 if ($gapSec > $gapThresholdSec) {
                     $gpsSegments[]  = $currentSegment;
                     $currentSegment = [];
 
                     $signalGaps[] = [
-                        'start_at'     => $t1->toISOString(),
-                        'end_at'       => $t2->toISOString(),
+                        'start_at'     => $t1->setTimezone('Asia/Jakarta')->toISOString(),
+                        'end_at'       => $t2->setTimezone('Asia/Jakarta')->toISOString(),
                         'duration_sec' => $gapSec,
                         'lat'          => $point['latitude'],
                         'lng'          => $point['longitude'],
@@ -356,6 +364,7 @@ class TripController extends Controller
     {
         $STOP_SPEED_THRESHOLD = 2;   // km/h — di bawah ini dianggap diam
         $STOP_MIN_DURATION    = 1;   // menit — minimal durasi supaya dihitung "stop"
+        $MERGE_GAP_SEC        = 30;  // detik — dua stop dipisah gap < ini, digabung jadi satu
 
         $stops      = [];
         $points     = $gpsPoints->values();
@@ -364,6 +373,11 @@ class TripController extends Controller
         if ($total < 2) {
             return $stops;
         }
+
+        // Helper: parse gps_timestamp dengan benar (DB simpan UTC, app tz = Asia/Jakarta)
+        $parseUTC = fn($pt) => \Carbon\Carbon::parse(
+            $pt->gps_timestamp->format('Y-m-d H:i:s'), 'UTC'
+        );
 
         $i = 0;
         while ($i < $total) {
@@ -380,49 +394,73 @@ class TripController extends Controller
                 }
 
                 $segEndIdx = $j;
-                $startTime = \Carbon\Carbon::parse($points[$segStartIdx]->gps_timestamp);
-                $endTime   = \Carbon\Carbon::parse($points[$segEndIdx]->gps_timestamp);
+                $startTime = $parseUTC($points[$segStartIdx]);
+                $endTime   = $parseUTC($points[$segEndIdx]);
                 $durationMinutes = $startTime->diffInSeconds($endTime) / 60;
 
                 if ($durationMinutes >= $STOP_MIN_DURATION) {
-                    // Titik representatif = titik tengah segmen (median index)
                     $midIdx = $segStartIdx + intdiv($segEndIdx - $segStartIdx, 2);
                     $midPt  = $points[$midIdx];
 
-                    $totalSeconds = $startTime->diffInSeconds($endTime);
-                    $durMin       = intdiv($totalSeconds, 60);
-                    $durSec       = $totalSeconds % 60;
-
-                    // Label detail: "1 menit 13 detik", atau "2 jam 5 menit 30 detik"
-                    if ($durMin >= 60) {
-                        $jam     = intdiv($durMin, 60);
-                        $sisaMin = $durMin % 60;
-                        $durLabel = "{$jam} jam {$sisaMin} menit {$durSec} detik";
-                    } elseif ($durMin > 0) {
-                        $durLabel = "{$durMin} menit {$durSec} detik";
-                    } else {
-                        $durLabel = "{$durSec} detik";
-                    }
-
                     $stops[] = [
-                        'lat'              => (float) $midPt->latitude,
-                        'lng'              => (float) $midPt->longitude,
-                        'started_at'       => $startTime->setTimezone('Asia/Jakarta')->format('H:i:s'),
-                        'ended_at'         => $endTime->setTimezone('Asia/Jakarta')->format('H:i:s'),
-                        'duration_seconds' => $totalSeconds,
-                        'duration_minutes' => $durMin,
-                        'duration_label'   => $durLabel,
+                        'lat'        => (float) $midPt->latitude,
+                        'lng'        => (float) $midPt->longitude,
+                        '_startTime' => $startTime,
+                        '_endTime'   => $endTime,
                     ];
                 }
 
-                // Lanjut dari setelah segmen ini
                 $i = $segEndIdx + 1;
             } else {
                 $i++;
             }
         }
 
-        return $stops;
+        // Gabungkan stop yang gap-nya < MERGE_GAP_SEC (cegah jitter GPS memecah satu stop jadi banyak)
+        $merged = [];
+        foreach ($stops as $stop) {
+            if (!empty($merged)) {
+                $prev    = &$merged[count($merged) - 1];
+                $gapSec  = $prev['_endTime']->diffInSeconds($stop['_startTime']);
+                if ($gapSec <= $MERGE_GAP_SEC) {
+                    $prev['_endTime'] = $stop['_endTime'];
+                    continue;
+                }
+            }
+            $merged[] = $stop;
+        }
+
+        // Format hasil akhir
+        $result = [];
+        foreach ($merged as $s) {
+            $startTime    = $s['_startTime'];
+            $endTime      = $s['_endTime'];
+            $totalSeconds = $startTime->diffInSeconds($endTime);
+            $durMin       = intdiv($totalSeconds, 60);
+            $durSec       = $totalSeconds % 60;
+
+            if ($durMin >= 60) {
+                $jam      = intdiv($durMin, 60);
+                $sisaMin  = $durMin % 60;
+                $durLabel = "{$jam} jam {$sisaMin} menit {$durSec} detik";
+            } elseif ($durMin > 0) {
+                $durLabel = "{$durMin} menit {$durSec} detik";
+            } else {
+                $durLabel = "{$durSec} detik";
+            }
+
+            $result[] = [
+                'lat'              => $s['lat'],
+                'lng'              => $s['lng'],
+                'started_at'       => $startTime->setTimezone('Asia/Jakarta')->format('H:i:s'),
+                'ended_at'         => $endTime->setTimezone('Asia/Jakarta')->format('H:i:s'),
+                'duration_seconds' => $totalSeconds,
+                'duration_minutes' => $durMin,
+                'duration_label'   => $durLabel,
+            ];
+        }
+
+        return $result;
     }
 
     private function haversine(float $lat1, float $lng1, float $lat2, float $lng2): float
