@@ -190,15 +190,100 @@ class VehicleMasterController extends Controller
             'status'      => $t->status,
         ])->values()->toArray();
 
+        $stops = $this->detectStops($allPoints);
+
         $mapType       = session('map_type', 'gmaps');
         $googleMapsKey = config('services.google_maps.key', '');
 
         return view('masters.vehicles.history', compact(
-            'vehicle', 'date', 'segments', 'signalGaps',
+            'vehicle', 'date', 'segments', 'signalGaps', 'stops',
             'totalDistKm', 'movingSec', 'maxSpeedKmh', 'count',
             'trips', 'dayAlerts', 'vehicles', 'tripsForMap',
             'mapType', 'googleMapsKey'
         ));
+    }
+
+    private function detectStops($points): array
+    {
+        $SPEED_THRESH  = 2;   // km/h
+        $MIN_DURATION  = 1;   // menit
+        $MERGE_GAP_SEC = 30;  // detik
+
+        $pts   = $points->values();
+        $total = $pts->count();
+        if ($total < 2) return [];
+
+        // DB::table() returns stdClass with plain string timestamps (UTC)
+        $parseUTC = fn($pt) => Carbon::parse($pt->gps_timestamp, 'UTC');
+
+        $raw = [];
+        $i   = 0;
+        while ($i < $total) {
+            $pt = $pts[$i];
+            if (($pt->speed_kmh ?? 0) <= $SPEED_THRESH) {
+                $startIdx = $i;
+                $j = $i;
+                while ($j + 1 < $total && ($pts[$j + 1]->speed_kmh ?? 0) <= $SPEED_THRESH) {
+                    $j++;
+                }
+                $startTime = $parseUTC($pts[$startIdx]);
+                $endTime   = $parseUTC($pts[$j]);
+                // Carbon 3: earlier->diffInSeconds(later) = positive
+                $durMin = $startTime->diffInSeconds($endTime) / 60;
+                if ($durMin >= $MIN_DURATION) {
+                    $midPt = $pts[$startIdx + intdiv($j - $startIdx, 2)];
+                    $raw[] = [
+                        'lat'   => (float) $midPt->latitude,
+                        'lng'   => (float) $midPt->longitude,
+                        '_s'    => $startTime,
+                        '_e'    => $endTime,
+                    ];
+                }
+                $i = $j + 1;
+            } else {
+                $i++;
+            }
+        }
+
+        // Merge stops separated by < MERGE_GAP_SEC
+        $merged = [];
+        foreach ($raw as $stop) {
+            if (!empty($merged)) {
+                $prev   = &$merged[count($merged) - 1];
+                $gapSec = $prev['_e']->diffInSeconds($stop['_s']);
+                if ($gapSec <= $MERGE_GAP_SEC) {
+                    $prev['_e'] = $stop['_e'];
+                    continue;
+                }
+            }
+            $merged[] = $stop;
+        }
+
+        // Format
+        $result = [];
+        foreach ($merged as $s) {
+            $totalSec = $s['_s']->diffInSeconds($s['_e']);
+            $durMin   = intdiv($totalSec, 60);
+            $durSec   = $totalSec % 60;
+            if ($durMin >= 60) {
+                $jam      = intdiv($durMin, 60);
+                $sisa     = $durMin % 60;
+                $durLabel = "{$jam} jam {$sisa} menit {$durSec} detik";
+            } elseif ($durMin > 0) {
+                $durLabel = "{$durMin} menit {$durSec} detik";
+            } else {
+                $durLabel = "{$durSec} detik";
+            }
+            $result[] = [
+                'lat'              => $s['lat'],
+                'lng'              => $s['lng'],
+                'started_at'       => $s['_s']->setTimezone('Asia/Jakarta')->format('H:i:s'),
+                'ended_at'         => $s['_e']->setTimezone('Asia/Jakarta')->format('H:i:s'),
+                'duration_seconds' => $totalSec,
+                'duration_label'   => $durLabel,
+            ];
+        }
+        return $result;
     }
 
     private function haversineKm(float $lat1, float $lng1, float $lat2, float $lng2): float

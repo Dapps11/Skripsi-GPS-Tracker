@@ -64,7 +64,7 @@
     </div>
 
     {{-- Stats --}}
-    <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
         <div class="stat-card">
             <div class="stat-val">{{ number_format($totalDistKm, 1) }} <span class="text-sm font-semibold text-gray-400">km</span></div>
             <div class="stat-lbl">Total Jarak</div>
@@ -82,6 +82,10 @@
             <div class="stat-lbl">Kecepatan Maks</div>
         </div>
         <div class="stat-card">
+            <div class="stat-val" style="color:#dc2626;">{{ count($stops) }}</div>
+            <div class="stat-lbl">Jumlah Stop</div>
+        </div>
+        <div class="stat-card">
             <div class="stat-val">{{ $count }}</div>
             <div class="stat-lbl">Data GPS</div>
         </div>
@@ -95,7 +99,7 @@
             </span>
             <div class="flex flex-wrap items-center gap-3">
                 {{-- Legend --}}
-                <div class="flex items-center gap-3 text-xs text-gray-500">
+                <div class="flex flex-wrap items-center gap-3 text-xs text-gray-500">
                     <span class="flex items-center gap-1">
                         <span class="inline-block w-4 h-1 rounded" style="background:#f97316;"></span>
                         Di luar trip
@@ -103,6 +107,10 @@
                     <span class="flex items-center gap-1">
                         <span class="inline-block w-4 h-1 bg-blue-500 rounded"></span>
                         Dalam trip
+                    </span>
+                    <span class="flex items-center gap-1">
+                        <span style="display:inline-block;width:12px;height:12px;background:#dc2626;border-radius:50%;border:2px solid white;box-shadow:0 0 0 3px #dc262640;flex-shrink:0;"></span>
+                        Stop
                     </span>
                     <span class="flex items-center gap-1" style="color:#7c3aed;">
                         <span style="display:inline-block;width:16px;border-top:2px dashed #7c3aed;"></span>
@@ -194,6 +202,7 @@ window.__historymap = {
     gmapsKey:    "{{ $googleMapsKey }}",
     segments:    @json($segments),
     signalGaps:  @json($signalGaps),
+    stops:       @json($stops),
     trips:       @json($tripsForMap),
 };
 
@@ -201,6 +210,7 @@ window.__historymap = {
     const CFG        = window.__historymap;
     const segments   = CFG.segments   ?? [];
     const signalGaps = CFG.signalGaps ?? [];
+    const stops      = CFG.stops      ?? [];
     const trips      = CFG.trips      ?? [];
 
     // ── Shared helpers ────────────────────────────────────────────
@@ -279,6 +289,22 @@ window.__historymap = {
             L.polyline([a, b], { color: '#7c3aed', weight: 2.5, opacity: .8, dashArray: '8,6' }).addTo(map);
             L.marker([(a[0]+b[0])/2, (a[1]+b[1])/2], { icon: gapIcon, zIndexOffset: 300 })
              .addTo(map).bindPopup(gapPopupContent(gap));
+        });
+
+        // Stop markers
+        stops.forEach(stop => {
+            const stopIcon = L.divIcon({
+                html: `<div style="width:16px;height:16px;background:#dc2626;border-radius:50%;
+                            border:3px solid white;box-shadow:0 0 0 4px #dc262640;
+                            display:flex;align-items:center;justify-content:center;">
+                           <div style="width:5px;height:5px;background:white;border-radius:50%;"></div>
+                       </div>`,
+                iconSize: [16, 16], iconAnchor: [8, 8], className: '',
+            });
+            L.marker([stop.lat, stop.lng], { icon: stopIcon, zIndexOffset: 600 })
+             .addTo(map)
+             .bindPopup(`<div style="font-weight:700;color:#dc2626;">⏱️ Stop ${stop.duration_label}</div>
+                         <div style="font-size:10px;color:#6b7280;margin-top:4px;">${stop.started_at} — ${stop.ended_at}</div>`);
         });
 
         // Start / end markers
@@ -384,6 +410,29 @@ window.__historymap = {
             mk.addListener('click', () => {
                 gapInfoWin.setContent(gapPopupContent(gap));
                 gapInfoWin.open(gMap, mk);
+            });
+        });
+
+        // Stop markers
+        const stopInfoWin = new google.maps.InfoWindow();
+        stops.forEach(stop => {
+            const mk = new google.maps.Marker({
+                position: { lat: stop.lat, lng: stop.lng },
+                map: gMap,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 8,
+                    fillColor: '#dc2626', fillOpacity: 1,
+                    strokeColor: '#fff', strokeWeight: 2,
+                },
+                zIndex: 600,
+            });
+            mk.addListener('click', () => {
+                stopInfoWin.setContent(
+                    `<div style="font-weight:700;color:#dc2626;font-size:12px;">⏱️ Stop ${stop.duration_label}</div>
+                     <div style="font-size:11px;color:#6b7280;margin-top:4px;">${stop.started_at} — ${stop.ended_at}</div>`
+                );
+                stopInfoWin.open(gMap, mk);
             });
         });
 
