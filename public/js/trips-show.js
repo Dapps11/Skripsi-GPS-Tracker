@@ -1,8 +1,10 @@
 // ── Config dari window.__tripshow ────────────────────────────────
-const MAP_TYPE  = window.__tripshow?.mapType  ?? 'osm';
+const MAP_TYPE  = window.__tripshow?.mapType  ?? 'gmaps';
 const GMAPS_KEY = window.__tripshow?.gmapsKey ?? '';
 const gpsPoints = window.__tripshow?.gpsPoints    ?? [];
 const gpsPointsRaw = window.__tripshow?.gpsPointsRaw ?? [];
+const gpsSegments = window.__tripshow?.gpsSegments ?? [];
+const signalGaps   = window.__tripshow?.signalGaps  ?? [];
 const trip      = window.__tripshow?.trip ?? null;
 const stopEvents= window.__tripshow?.stopEvents ?? [];
 
@@ -62,20 +64,43 @@ async function initOSMHistory() {
         }
     }
 
-    // ── Track orange (GPS history) ────────────────────────────────
-    if (hasGps) {
-        const coords = gpsPoints.map(p => [+p.latitude, +p.longitude]);
+    // ── Track orange (GPS history) — dipecah per segmen biar gak ada
+    //    garis lurus "meloncat" pas sinyal sempat putus ──────────────
+    if (gpsSegments && gpsSegments.length) {
+        gpsSegments.forEach(segment => {
+            if (segment.length < 2) return;
+            const coords = segment.map(p => [+p.latitude, +p.longitude]);
 
-        // Shadow orange
-        L.polyline(coords, {
-            color:'#fb923c', weight:10, opacity:.18,
-            lineCap:'round', lineJoin:'round'
-        }).addTo(map);
-        // Garis orange utama
-        L.polyline(coords, {
-            color:'#f97316', weight:4.5, opacity:.9,
-            lineCap:'round', lineJoin:'round'
-        }).addTo(map);
+            L.polyline(coords, {
+                color:'#fb923c', weight:10, opacity:.18,
+                lineCap:'round', lineJoin:'round'
+            }).addTo(map);
+            L.polyline(coords, {
+                color:'#f97316', weight:4.5, opacity:.9,
+                lineCap:'round', lineJoin:'round'
+            }).addTo(map);
+        });
+    } else if (hasGps) {
+        // Fallback: trip lama sebelum fitur segmentasi ini ada
+        const coords = gpsPoints.map(p => [+p.latitude, +p.longitude]);
+        L.polyline(coords, { color:'#fb923c', weight:10, opacity:.18, lineCap:'round', lineJoin:'round' }).addTo(map);
+        L.polyline(coords, { color:'#f97316', weight:4.5, opacity:.9, lineCap:'round', lineJoin:'round' }).addTo(map);
+    }
+
+    // ── Marker celah sinyal ─────────────────────────────────────────
+    if (signalGaps && signalGaps.length) {
+        const gapIcon = L.divIcon({
+            html: `<div style="width:16px;height:16px;background:#7c3aed;border-radius:50%;border:3px solid white;box-shadow:0 0 0 3px #7c3aed55;display:flex;align-items:center;justify-content:center;font-size:9px;">📡</div>`,
+            iconSize: [16,16], iconAnchor: [8,8], className: ''
+        });
+        signalGaps.forEach(gap => {
+            const mins  = Math.floor(gap.duration_sec / 60);
+            const secs  = gap.duration_sec % 60;
+            const label = mins > 0 ? `${mins}m ${secs}d` : `${secs}d`;
+            L.marker([+gap.lat, +gap.lng], { icon: gapIcon, zIndexOffset: 400 })
+             .addTo(map)
+             .bindTooltip(`<b>📡 Sinyal terputus ${label}</b>`, { permanent: false, direction: 'top' });
+        });
     }
 
     // ── Marker waypoint ───────────────────────────────────────────
@@ -192,22 +217,48 @@ window.createGHistory = function () {
         });
     }
 
-    // ── Track orange (GPS history) ────────────────────────────────
-    if (hasGps) {
-        const coords = gpsPoints.map(p => ({ lat: +p.latitude, lng: +p.longitude }));
+    // ── Track orange (GPS history) — dipecah per segmen biar gak ada
+    //    garis lurus "meloncat" pas sinyal sempat putus ──────────────
+    if (gpsSegments && gpsSegments.length) {
+        gpsSegments.forEach(segment => {
+            if (segment.length < 2) return;
+            const coords = segment.map(p => ({ lat: +p.latitude, lng: +p.longitude }));
 
-        // Shadow orange
-        new google.maps.Polyline({
-            path: coords, map: gMap,
-            strokeColor: '#fb923c', strokeOpacity: .2, strokeWeight: 10,
-            zIndex: 2,
+            new google.maps.Polyline({
+                path: coords, map: gMap,
+                strokeColor: '#fb923c', strokeOpacity: .2, strokeWeight: 10,
+                zIndex: 2,
+            });
+            new google.maps.Polyline({
+                path: coords, map: gMap,
+                strokeColor: '#f97316', strokeOpacity: .9, strokeWeight: 4.5,
+                zIndex: 3,
+            });
         });
-        // Garis orange utama — zIndex lebih tinggi supaya selalu di atas garis biru,
-        // termasuk setelah DirectionsRenderer selesai render secara async
-        new google.maps.Polyline({
-            path: coords, map: gMap,
-            strokeColor: '#f97316', strokeOpacity: .9, strokeWeight: 4.5,
-            zIndex: 3,
+    } else if (hasGps) {
+        // Fallback: trip lama sebelum fitur segmentasi ini ada
+        const coords = gpsPoints.map(p => ({ lat: +p.latitude, lng: +p.longitude }));
+        new google.maps.Polyline({ path: coords, map: gMap, strokeColor: '#fb923c', strokeOpacity: .2, strokeWeight: 10, zIndex: 2 });
+        new google.maps.Polyline({ path: coords, map: gMap, strokeColor: '#f97316', strokeOpacity: .9, strokeWeight: 4.5, zIndex: 3 });
+    }
+
+    // ── Marker celah sinyal ─────────────────────────────────────────
+    if (signalGaps && signalGaps.length) {
+        signalGaps.forEach(gap => {
+            const mins  = Math.floor(gap.duration_sec / 60);
+            const secs  = gap.duration_sec % 60;
+            const label = mins > 0 ? `${mins}m ${secs}d` : `${secs}d`;
+            new google.maps.Marker({
+                position: { lat: +gap.lat, lng: +gap.lng },
+                map: gMap,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 8, fillColor: '#7c3aed', fillOpacity: 1,
+                    strokeColor: 'white', strokeWeight: 3,
+                },
+                title: `Sinyal terputus ${label}`,
+                zIndex: 997,
+            });
         });
     }
 

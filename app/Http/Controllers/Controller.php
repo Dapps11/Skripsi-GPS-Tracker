@@ -10,10 +10,10 @@ class Controller extends BaseController
 {
     use AuthorizesRequests, ValidatesRequests;
 
-    // Baca preferensi map dari session, default OSM
+    // Baca preferensi map dari session, default Google Maps
     protected function mapType(): string
     {
-        return session('map_type', 'osm');
+        return session('map_type', 'gmaps');
     }
 
     // Data map yang dibutuhkan semua view

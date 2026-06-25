@@ -288,7 +288,7 @@
                 <button id="global-opt-osm"
                         onclick="globalSwitchMap('osm')"
                         class="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
-                               {{ session('map_type','osm') === 'osm'
+                               {{ session('map_type','gmaps') === 'osm'
                                    ? 'bg-white text-green-700 shadow-sm'
                                    : 'text-gray-500 hover:text-gray-700' }}">
                     🌍 <span class="hidden md:inline">OpenStreetMap</span>
@@ -296,7 +296,7 @@
                 <button id="global-opt-gmaps"
                         onclick="globalSwitchMap('gmaps')"
                         class="flex items-center gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs font-semibold transition-all
-                               {{ session('map_type','osm') === 'gmaps'
+                               {{ session('map_type','gmaps') === 'gmaps'
                                    ? 'bg-white text-red-600 shadow-sm'
                                    : 'text-gray-500 hover:text-gray-700' }}">
                     <svg viewBox="0 0 24 24" class="w-3.5 h-3.5 flex-shrink-0">

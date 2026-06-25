@@ -182,7 +182,7 @@ class TripController extends Controller
             $monitoringEvents = $query->orderBy('event_timestamp')->get();
         }
 
-        $mapType       = session('map_type', 'osm');
+        $mapType       = session('map_type', 'gmaps');
         $googleMapsKey = config('services.google_maps.key', '');
 
         // Deteksi titik-titik berhenti (stop events) — pakai data mentah dulu
@@ -205,8 +205,39 @@ class TripController extends Controller
             ];
         });
 
-        $gpsSegments = [];
-        $signalGaps = [];
+        // ── Deteksi celah sinyal & pecah jalur jadi beberapa segmen ──────
+        // >30 detik tanpa data baru dianggap sinyal putus (interval normal ±5 detik)
+        $gapThresholdSec = 30;
+        $gpsSegments     = [];
+        $signalGaps      = [];
+        $currentSegment  = [];
+        $pointCount      = count($gpsPointsForMap);
+
+        foreach ($gpsPointsForMap as $i => $point) {
+            $currentSegment[] = $point;
+
+            if ($i < $pointCount - 1) {
+                $t1     = \Carbon\Carbon::parse($point['gps_timestamp']);
+                $t2     = \Carbon\Carbon::parse($gpsPointsForMap[$i + 1]['gps_timestamp']);
+                $gapSec = $t1->diffInSeconds($t2);
+
+                if ($gapSec > $gapThresholdSec) {
+                    $gpsSegments[]  = $currentSegment;
+                    $currentSegment = [];
+
+                    $signalGaps[] = [
+                        'start_at'     => $t1->toISOString(),
+                        'end_at'       => $t2->toISOString(),
+                        'duration_sec' => $gapSec,
+                        'lat'          => $point['latitude'],
+                        'lng'          => $point['longitude'],
+                    ];
+                }
+            }
+        }
+        if (!empty($currentSegment)) {
+            $gpsSegments[] = $currentSegment;
+        }
 
         return view('trips.show', compact(
             'trip', 'gpsPoints', 'gpsPointsForMap', 'mapType', 'googleMapsKey',
