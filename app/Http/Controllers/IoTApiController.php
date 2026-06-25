@@ -18,7 +18,7 @@ use Carbon\Carbon;
 class IoTApiController extends Controller
 {
     const MOVING_SPEED  = 2;
-    const ARRIVAL_DIST  = 0.03; // 30 meter
+    const ARRIVAL_DIST  = 0.1;  // 100 meter
 
     public function receiveTelemetry(Request $request)
     {
@@ -68,8 +68,8 @@ class IoTApiController extends Controller
             'gsm_signal'    => $data['gsm_signal'] ?? null,
             'network_type'  => $data['network_type'] ?? null,
             'gps_timestamp' => isset($data['gps_timestamp'])
-                ? Carbon::parse($data['gps_timestamp'])
-                : now(),
+                ? Carbon::parse($data['gps_timestamp'], 'UTC')
+                : Carbon::now('UTC'),
             'recorded_at'   => now(),
         ]);
 
@@ -287,7 +287,7 @@ class IoTApiController extends Controller
         if ($device->vehicle_id) {
             $activeTrip = Trip::where('vehicle_id', $device->vehicle_id)
                               ->where('status', 'in_progress')
-                              ->latest()
+                              ->latest('departed_at')
                               ->first();
         }
 

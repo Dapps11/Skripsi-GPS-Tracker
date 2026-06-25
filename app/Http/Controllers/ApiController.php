@@ -41,12 +41,14 @@ class ApiController extends Controller
 
         $gpsTrack = collect();
         if ($trip && $trip->departed_at) {
-            // Trip ini masih berjalan, jadi cukup batasi dari departed_at —
-            // tidak akan menyentuh data milik trip lain karena trip lain
-            // (completed/planned) tidak pernah lolos filter status di atas.
+            // departed_at disimpan sebagai WIB (now() dengan app_tz Asia/Jakarta),
+            // sedangkan gps_timestamp disimpan sebagai UTC string. Konversi
+            // departed_at ke UTC dulu agar perbandingan MySQL tidak salah.
+            $departedUtcStr = \Carbon\Carbon::parse($trip->departed_at, 'Asia/Jakarta')
+                                ->utc()->toDateTimeString();
             $gpsTrack = DB::table('gps_telemetry')
                         ->where('vehicle_id', $vehicle->id)
-                        ->where('gps_timestamp', '>=', $trip->departed_at)
+                        ->where('gps_timestamp', '>=', $departedUtcStr)
                         ->orderBy('gps_timestamp')
                         ->get(['latitude', 'longitude', 'speed_kmh', 'gps_timestamp']);
         }
@@ -57,10 +59,15 @@ class ApiController extends Controller
         // ── ETA calculations ────────────────────────────────────────
         $etaData = $this->calcAllETA($trip, $lastGps, $currentSpeed);
 
-        $driverStatus = DB::table('driver_monitoring_events')
+        $latestMonitoring = DB::table('driver_monitoring_events')
                         ->where('vehicle_id', $vehicle->id)
                         ->orderByDesc('recorded_at')
-                        ->value('driver_status');
+                        ->first(['event_type', 'is_alarm']);
+        $driverStatus = match(true) {
+            $latestMonitoring?->is_alarm == true          => 'danger',
+            $latestMonitoring?->event_type === 'drowsy'   => 'warning',
+            default                                        => 'normal',
+        };
 
         return response()->json([
             'trip' => $trip ? array_merge((array) $trip, [
@@ -96,7 +103,9 @@ class ApiController extends Controller
         $destLng = (float) $trip->dest_lng;
 
         // ── ETA real-time haversine ───────────────────────────────────
-        $realtimeMin = null;
+        $realtimeMin    = null;
+        $realtimeGoogle = null;
+        $distM          = null;
         if ($lastGps) {
             $curLat  = (float) $lastGps->latitude;
             $curLng  = (float) $lastGps->longitude;
@@ -197,10 +206,10 @@ class ApiController extends Controller
     public function alerts()
     {
         return response()->json(
-            Alert::where('is_read', false)
+            Alert::where('triggered_at', '>=', now()->subDays(30))
                  ->with(['vehicle', 'driver'])
                  ->orderByDesc('triggered_at')
-                 ->take(20)
+                 ->take(50)
                  ->get()
         );
     }

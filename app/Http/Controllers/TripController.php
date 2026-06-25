@@ -97,12 +97,19 @@ class TripController extends Controller
                                 ->get(['latitude', 'longitude', 'speed_kmh', 'gps_timestamp']);
 
         if ($gpsPoints->isEmpty() && $trip->departed_at) {
+            // departed_at & arrived_at disimpan sebagai WIB (now() + app_tz Asia/Jakarta),
+            // sedangkan gps_timestamp disimpan UTC — konversi ke UTC dulu.
+            $departedUtc = \Carbon\Carbon::parse(
+                $trip->departed_at->format('Y-m-d H:i:s'), 'Asia/Jakarta'
+            )->utc()->toDateTimeString();
+
             $query = GpsTelemetry::where('vehicle_id', $trip->vehicle_id)
-                                ->where('gps_timestamp', '>=', $trip->departed_at);
+                                ->where('gps_timestamp', '>=', $departedUtc);
             if ($trip->arrived_at) {
-                $query->where('gps_timestamp', '<=',
-                    \Carbon\Carbon::parse($trip->arrived_at)->addMinutes(5)
-                );
+                $arrivedUtc = \Carbon\Carbon::parse(
+                    $trip->arrived_at->format('Y-m-d H:i:s'), 'Asia/Jakarta'
+                )->utc()->addMinutes(5)->toDateTimeString();
+                $query->where('gps_timestamp', '<=', $arrivedUtc);
             } else {
                 // Trip ini belum punya arrived_at (masih berjalan / belum
                 // ditandai selesai). Tanpa batas atas, fallback ini bisa
@@ -117,7 +124,9 @@ class TripController extends Controller
                     ->value('departed_at');
 
                 if ($nextTripDepartedAt) {
-                    $query->where('gps_timestamp', '<', $nextTripDepartedAt);
+                    $nextUtc = \Carbon\Carbon::parse($nextTripDepartedAt, 'Asia/Jakarta')
+                                ->utc()->toDateTimeString();
+                    $query->where('gps_timestamp', '<', $nextUtc);
                 }
             }
             $gpsPoints = $query->orderBy('gps_timestamp')

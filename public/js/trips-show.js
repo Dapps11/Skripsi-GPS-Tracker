@@ -87,19 +87,40 @@ async function initOSMHistory() {
         L.polyline(coords, { color:'#f97316', weight:4.5, opacity:.9, lineCap:'round', lineJoin:'round' }).addTo(map);
     }
 
-    // ── Marker celah sinyal ─────────────────────────────────────────
-    if (signalGaps && signalGaps.length) {
-        const gapIcon = L.divIcon({
-            html: `<div style="width:16px;height:16px;background:#7c3aed;border-radius:50%;border:3px solid white;box-shadow:0 0 0 3px #7c3aed55;display:flex;align-items:center;justify-content:center;font-size:9px;">📡</div>`,
-            iconSize: [16,16], iconAnchor: [8,8], className: ''
+    // ── Celah sinyal — garis ungu putus + bubble permanen ──────────
+    if (signalGaps && signalGaps.length && gpsSegments && gpsSegments.length >= 2) {
+        const gapDotIcon = L.divIcon({
+            html: `<div style="width:14px;height:14px;background:#7c3aed;border-radius:50%;border:2px solid white;box-shadow:0 0 0 3px #7c3aed55;"></div>`,
+            iconSize: [14, 14], iconAnchor: [7, 7], className: ''
         });
-        signalGaps.forEach(gap => {
-            const mins  = Math.floor(gap.duration_sec / 60);
-            const secs  = gap.duration_sec % 60;
-            const label = mins > 0 ? `${mins}m ${secs}d` : `${secs}d`;
-            L.marker([+gap.lat, +gap.lng], { icon: gapIcon, zIndexOffset: 400 })
+        signalGaps.forEach((gap, i) => {
+            const nextSeg = gpsSegments[i + 1];
+            if (!nextSeg || !nextSeg.length) return;
+
+            const startPt  = [+gap.lat, +gap.lng];
+            const endPt    = [+nextSeg[0].latitude, +nextSeg[0].longitude];
+            const midPt    = [(startPt[0] + endPt[0]) / 2, (startPt[1] + endPt[1]) / 2];
+
+            const mins     = Math.floor(gap.duration_sec / 60);
+            const secs     = gap.duration_sec % 60;
+            const durLabel = mins > 0 ? `${mins}m ${secs}d` : `${secs}d`;
+            const tStart   = new Date(gap.start_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            const tEnd     = new Date(gap.end_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+            // Garis ungu putus-putus antara titik akhir sebelum gap dan titik awal sesudah gap
+            L.polyline([startPt, endPt], {
+                color: '#7c3aed', weight: 3, opacity: 0.85,
+                dashArray: '8, 6', lineCap: 'round', lineJoin: 'round'
+            }).addTo(map);
+
+            // Bubble permanen di tengah garis
+            L.marker(midPt, { icon: gapDotIcon, zIndexOffset: 400 })
              .addTo(map)
-             .bindTooltip(`<b>📡 Sinyal terputus ${label}</b>`, { permanent: false, direction: 'top' });
+             .bindTooltip(
+                 `<div style="font-weight:700;color:#7c3aed;">📡 Sinyal GPS/Internet Hilang</div>
+                  <div style="font-size:10px;color:#6b7280;margin-top:2px;">${tStart} — ${tEnd} (${durLabel})</div>`,
+                 { permanent: true, direction: 'top', offset: [0, -8], className: 'stop-bubble-tooltip' }
+             );
         });
     }
 
@@ -242,21 +263,28 @@ window.createGHistory = function () {
         new google.maps.Polyline({ path: coords, map: gMap, strokeColor: '#f97316', strokeOpacity: .9, strokeWeight: 4.5, zIndex: 3 });
     }
 
-    // ── Marker celah sinyal ─────────────────────────────────────────
-    if (signalGaps && signalGaps.length) {
-        signalGaps.forEach(gap => {
-            const mins  = Math.floor(gap.duration_sec / 60);
-            const secs  = gap.duration_sec % 60;
-            const label = mins > 0 ? `${mins}m ${secs}d` : `${secs}d`;
+    // ── Celah sinyal — garis ungu putus-putus + titik di tengah ────
+    if (signalGaps && signalGaps.length && gpsSegments && gpsSegments.length >= 2) {
+        signalGaps.forEach((gap, i) => {
+            const nextSeg = gpsSegments[i + 1];
+            if (!nextSeg || !nextSeg.length) return;
+
+            const startPt = { lat: +gap.lat, lng: +gap.lng };
+            const endPt   = { lat: +nextSeg[0].latitude, lng: +nextSeg[0].longitude };
+
+            // Garis ungu putus-putus
+            new google.maps.Polyline({
+                path: [startPt, endPt], map: gMap,
+                strokeColor: '#7c3aed', strokeOpacity: 0, strokeWeight: 3,
+                icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 1, strokeColor: '#7c3aed', strokeWeight: 3, scale: 4 }, offset: '0', repeat: '14px' }],
+                zIndex: 4,
+            });
+
+            // Titik ungu di tengah garis
             new google.maps.Marker({
-                position: { lat: +gap.lat, lng: +gap.lng },
+                position: { lat: (startPt.lat + endPt.lat) / 2, lng: (startPt.lng + endPt.lng) / 2 },
                 map: gMap,
-                icon: {
-                    path: google.maps.SymbolPath.CIRCLE,
-                    scale: 8, fillColor: '#7c3aed', fillOpacity: 1,
-                    strokeColor: 'white', strokeWeight: 3,
-                },
-                title: `Sinyal terputus ${label}`,
+                icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7, fillColor: '#7c3aed', fillOpacity: 1, strokeColor: 'white', strokeWeight: 2 },
                 zIndex: 997,
             });
         });
@@ -289,25 +317,27 @@ window.createGHistory = function () {
 
     // ── Custom permanent bubble overlay (tidak ada tombol close) ───
     class StopBubbleOverlay extends google.maps.OverlayView {
-        constructor(position, html) {
+        constructor(position, html, borderColor = '#dc2626', shadowColor = 'rgba(220,38,38,.25)') {
             super();
-            this.position = position;
-            this.html     = html;
-            this.div      = null;
+            this.position    = position;
+            this.html        = html;
+            this.borderColor = borderColor;
+            this.shadowColor = shadowColor;
+            this.div         = null;
         }
         onAdd() {
             this.div = document.createElement('div');
             this.div.style.position = 'absolute';
             this.div.style.transform = 'translate(-50%, -100%)';
             this.div.style.background = 'white';
-            this.div.style.border = '1.5px solid #dc2626';
+            this.div.style.border = `1.5px solid ${this.borderColor}`;
             this.div.style.borderRadius = '10px';
             this.div.style.padding = '6px 10px';
-            this.div.style.boxShadow = '0 2px 8px rgba(220,38,38,.25)';
+            this.div.style.boxShadow = `0 2px 8px ${this.shadowColor}`;
             this.div.style.fontSize = '11px';
             this.div.style.lineHeight = '1.4';
             this.div.style.whiteSpace = 'nowrap';
-            this.div.style.pointerEvents = 'none'; // tidak menghalangi interaksi peta
+            this.div.style.pointerEvents = 'none';
             this.div.innerHTML = this.html;
             this.getPanes().floatPane.appendChild(this.div);
         }
@@ -353,6 +383,32 @@ window.createGHistory = function () {
                 bubbleHtml
             );
             overlay.setMap(gMap);
+        });
+    }
+
+    // ── Bubble permanen celah sinyal (setelah StopBubbleOverlay terdefinisi) ──
+    if (signalGaps && signalGaps.length && gpsSegments && gpsSegments.length >= 2) {
+        signalGaps.forEach((gap, i) => {
+            const nextSeg = gpsSegments[i + 1];
+            if (!nextSeg || !nextSeg.length) return;
+
+            const midPt = {
+                lat: (+gap.lat + +nextSeg[0].latitude)  / 2,
+                lng: (+gap.lng + +nextSeg[0].longitude) / 2,
+            };
+            const mins     = Math.floor(gap.duration_sec / 60);
+            const secs     = gap.duration_sec % 60;
+            const durLabel = mins > 0 ? `${mins}m ${secs}d` : `${secs}d`;
+            const tStart   = new Date(gap.start_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+            const tEnd     = new Date(gap.end_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
+
+            new StopBubbleOverlay(
+                new google.maps.LatLng(midPt.lat, midPt.lng),
+                `<div style="font-weight:700;color:#7c3aed;">📡 Sinyal GPS/Internet Hilang</div>
+                 <div style="font-size:10px;color:#6b7280;margin-top:2px;">${tStart} — ${tEnd} (${durLabel})</div>`,
+                '#7c3aed',
+                'rgba(124,58,237,.2)'
+            ).setMap(gMap);
         });
     }
 
