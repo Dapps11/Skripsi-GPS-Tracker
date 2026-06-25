@@ -178,10 +178,21 @@ class VehicleMasterController extends Controller
 
         $vehicles = Vehicle::orderBy('name')->get(['id', 'name', 'license_plate']);
 
+        $tripsForMap = $trips->map(fn($t) => [
+            'trip_code'   => $t->trip_code,
+            'origin_name' => $t->origin_name,
+            'dest_name'   => $t->dest_name,
+            'origin_lat'  => $t->origin_lat,
+            'origin_lng'  => $t->origin_lng,
+            'dest_lat'    => $t->dest_lat,
+            'dest_lng'    => $t->dest_lng,
+            'status'      => $t->status,
+        ])->values()->toArray();
+
         return view('masters.vehicles.history', compact(
             'vehicle', 'date', 'segments', 'signalGaps',
             'totalDistKm', 'movingSec', 'maxSpeedKmh', 'count',
-            'trips', 'dayAlerts', 'vehicles'
+            'trips', 'dayAlerts', 'vehicles', 'tripsForMap'
         ));
     }
 

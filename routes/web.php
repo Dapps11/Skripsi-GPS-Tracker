@@ -53,6 +53,14 @@ Route::middleware('auth')->group(function () {
         })->name('vehicle.device');
     });
 
+    // Riwayat Harian — redirect ke kendaraan pertama
+    Route::get('/riwayat', function () {
+        $vehicle = \App\Models\Vehicle::orderBy('name')->first();
+        if (!$vehicle) return redirect()->route('master.vehicles.index')
+                                        ->with('info', 'Belum ada kendaraan.');
+        return redirect()->route('master.vehicles.history', $vehicle);
+    })->name('riwayat.index');
+
     // GPS Tester — hanya untuk development
     Route::get('/gps-tester', function () {
         $devices = \App\Models\IotDevice::whereNull('deleted_at')

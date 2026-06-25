@@ -168,6 +168,14 @@
             Trip Management
         </a>
 
+        <a href="{{ route('riwayat.index') }}"
+           class="sidebar-link {{ request()->routeIs('master.vehicles.history') || request()->routeIs('riwayat.*') ? 'active' : '' }}">
+            <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M9 20l-5.447-2.724A1 1 0 013 16.382V5.618a1 1 0 011.447-.894L9 7m0 13l6-3m-6 3V7m6 10l4.553 2.276A1 1 0 0021 18.382V7.618a1 1 0 00-.553-.894L15 4m0 13V4m0 0L9 7"/>
+            </svg>
+            Riwayat Harian
+        </a>
+
         <div class="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-2 mt-4">Master Data</div>
 
         <a href="{{ route('master.drivers.index') }}"
@@ -179,7 +187,7 @@
         </a>
 
         <a href="{{ route('master.vehicles.index') }}"
-           class="sidebar-link {{ request()->routeIs('master.vehicles.*') ? 'active' : '' }}">
+           class="sidebar-link {{ request()->routeIs('master.vehicles.index') || request()->routeIs('master.vehicles.create') || request()->routeIs('master.vehicles.edit') ? 'active' : '' }}">
             <svg class="w-4 h-4 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                 <path d="M9 17a2 2 0 11-4 0 2 2 0 014 0zM19 17a2 2 0 11-4 0 2 2 0 014 0z"/>
                 <path stroke-linecap="round" stroke-linejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 .001M13 16H9m4 0h4.5M13 16V9.5l3.5 1.5 2 3.5V16H17"/>

@@ -177,16 +177,7 @@
 (function () {
     const segments   = @json($segments);
     const signalGaps = @json($signalGaps);
-    const trips      = @json($trips->map(fn($t) => [
-        'trip_code'   => $t->trip_code,
-        'origin_name' => $t->origin_name,
-        'dest_name'   => $t->dest_name,
-        'origin_lat'  => $t->origin_lat,
-        'origin_lng'  => $t->origin_lng,
-        'dest_lat'    => $t->dest_lat,
-        'dest_lng'    => $t->dest_lng,
-        'status'      => $t->status,
-    ]));
+    const trips      = @json($tripsForMap);
 
     const map = L.map('history-map');
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
