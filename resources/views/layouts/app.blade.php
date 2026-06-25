@@ -338,7 +338,7 @@
                 {{-- Dropdown --}}
                 <div id="notif-dropdown"
                      class="hidden absolute right-0 top-full mt-2 w-80 bg-white border border-gray-200 rounded-2xl shadow-xl z-[9999] overflow-hidden"
-                     style="max-height:420px;">
+                     style="max-height:420px;max-width:calc(100vw - 0.5rem);">
                     <div class="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                         <span class="text-sm font-bold text-gray-900">Notifikasi</span>
                         <button onclick="markAllRead()" class="text-xs text-green-600 hover:text-green-700 font-semibold">Tandai semua dibaca</button>
