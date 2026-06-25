@@ -112,12 +112,11 @@ class VehicleMasterController extends Controller
             ->where('vehicle_id', $vehicle->id)
             ->whereBetween('gps_timestamp', [$startUtc->toDateTimeString(), $endUtc->toDateTimeString()])
             ->orderBy('gps_timestamp')
-            ->get(['latitude', 'longitude', 'speed_kmh', 'gps_timestamp']);
+            ->get(['latitude', 'longitude', 'speed_kmh', 'gps_timestamp', 'trip_id']);
 
         // Stats
         $totalDistKm = 0.0;
         $movingSec   = 0;
-        $maxSpeedKmh = 0.0;
         $count       = $allPoints->count();
         for ($i = 1; $i < $count; $i++) {
             $p  = $allPoints[$i];
@@ -126,13 +125,14 @@ class VehicleMasterController extends Controller
                 (float)$pp->latitude, (float)$pp->longitude,
                 (float)$p->latitude,  (float)$p->longitude
             );
-            if ((float)$p->speed_kmh > (float)$pp->speed_kmh) {
-                $maxSpeedKmh = max($maxSpeedKmh, (float)$p->speed_kmh);
-            }
             if ((float)$p->speed_kmh > 2) {
-                $diffSec = Carbon::parse($p->gps_timestamp, 'UTC')
-                    ->diffInSeconds(Carbon::parse($pp->gps_timestamp, 'UTC'));
-                $movingSec += min((int)$diffSec, 120); // cap per-interval to 2 min
+                // Carbon 3 returns signed diff: use earlier->diffInSeconds(later) = positive
+                $diffSec = Carbon::parse($pp->gps_timestamp, 'UTC')
+                    ->diffInSeconds(Carbon::parse($p->gps_timestamp, 'UTC'));
+                // Skip large gaps (signal loss / long stop) — don't count as moving time
+                if ($diffSec > 0 && $diffSec <= 600) {
+                    $movingSec += (int)$diffSec;
+                }
             }
         }
         $maxSpeedKmh = $allPoints->max('speed_kmh') ?? 0;
@@ -148,8 +148,9 @@ class VehicleMasterController extends Controller
         foreach ($sampled as $i => $pt) {
             if ($i === 0) { $segments[0][] = $pt; continue; }
             $prev    = $sampled[$i - 1];
-            $diffSec = Carbon::parse($pt->gps_timestamp, 'UTC')
-                ->diffInSeconds(Carbon::parse($prev->gps_timestamp, 'UTC'));
+            // Carbon 3: earlier->diffInSeconds(later) = positive
+            $diffSec = Carbon::parse($prev->gps_timestamp, 'UTC')
+                ->diffInSeconds(Carbon::parse($pt->gps_timestamp, 'UTC'));
             if ($diffSec > $gapThresholdSec) {
                 $signalGaps[] = [
                     'lat'          => $prev->latitude,
@@ -189,10 +190,14 @@ class VehicleMasterController extends Controller
             'status'      => $t->status,
         ])->values()->toArray();
 
+        $mapType       = session('map_type', 'gmaps');
+        $googleMapsKey = config('services.google_maps.key', '');
+
         return view('masters.vehicles.history', compact(
             'vehicle', 'date', 'segments', 'signalGaps',
             'totalDistKm', 'movingSec', 'maxSpeedKmh', 'count',
-            'trips', 'dayAlerts', 'vehicles', 'tripsForMap'
+            'trips', 'dayAlerts', 'vehicles', 'tripsForMap',
+            'mapType', 'googleMapsKey'
         ));
     }
 
