@@ -101,6 +101,11 @@ class IoTApiController extends Controller
             );
         }
 
+        // Kendaraan bergerak tanpa ada trip aktif / planned
+        if ($isMoving && !$activeTrip && $device->vehicle_id) {
+            $this->alertUnauthorizedMovement($device, $data['latitude'], $data['longitude']);
+        }
+
         // ── BROADCAST via WebSocket ───────────────────────────────
         $this->broadcastUpdates($device, $data, $vehicleStatus, $activeTrip);
 
@@ -209,6 +214,10 @@ class IoTApiController extends Controller
             $telemetry->update(['trip_id' => $activeTrip->id]);
         }
 
+        // Deteksi berhenti terlalu lama & keluar jalur
+        $this->detectLongStop($device, $activeTrip, $isMoving);
+        $this->detectRouteDeviation($device, $lat, $lng, $activeTrip);
+
         // Cek arrival
         $distToDest = $this->haversine($lat, $lng, $activeTrip->dest_lat, $activeTrip->dest_lng);
 
@@ -235,6 +244,125 @@ class IoTApiController extends Controller
         }
 
         return $activeTrip;
+    }
+
+    private function detectLongStop(IotDevice $device, Trip $activeTrip, bool $isMoving): void
+    {
+        if ($isMoving) return;
+
+        // Cari awal rentetan record kecepatan rendah (streak berhenti)
+        $points = DB::table('gps_telemetry')
+            ->where('vehicle_id', $device->vehicle_id)
+            ->where('trip_id', $activeTrip->id)
+            ->orderByDesc('gps_timestamp')
+            ->limit(300)
+            ->get(['gps_timestamp', 'speed_kmh']);
+
+        $streakStart = null;
+        foreach ($points as $pt) {
+            if ((float)$pt->speed_kmh <= self::MOVING_SPEED) {
+                $streakStart = $pt->gps_timestamp;
+            } else {
+                break;
+            }
+        }
+
+        if (!$streakStart) return;
+
+        $stopMinutes = Carbon::parse($streakStart, 'UTC')->diffInMinutes(now('UTC'));
+        if ($stopMinutes < 30) return;
+
+        // Throttle: 1 alert per 30 menit per trip
+        $exists = Alert::where('vehicle_id', $device->vehicle_id)
+            ->where('alert_type', 'long_stop')
+            ->where('triggered_at', '>=', now()->subMinutes(30))
+            ->exists();
+        if ($exists) return;
+
+        Alert::create([
+            'alert_type'   => 'long_stop',
+            'severity'     => 'warning',
+            'vehicle_id'   => $device->vehicle_id,
+            'driver_id'    => $device->driver_id,
+            'device_id'    => $device->id,
+            'title'        => 'Kendaraan Berhenti Terlalu Lama — ' . optional($device->vehicle)->name,
+            'message'      => "Kendaraan berhenti {$stopMinutes} menit dalam perjalanan (Trip {$activeTrip->trip_code}).",
+            'triggered_at' => now(),
+        ]);
+    }
+
+    private function detectRouteDeviation(IotDevice $device, float $lat, float $lng, Trip $activeTrip): void
+    {
+        if (!$activeTrip->origin_lat || !$activeTrip->dest_lat) return;
+
+        $deviationKm = $this->crossTrackDistance(
+            $lat, $lng,
+            (float)$activeTrip->origin_lat, (float)$activeTrip->origin_lng,
+            (float)$activeTrip->dest_lat,   (float)$activeTrip->dest_lng
+        );
+
+        if ($deviationKm < 5.0) return;  // threshold: 5 km
+
+        // Throttle: 1 alert per 15 menit per kendaraan
+        $exists = Alert::where('vehicle_id', $device->vehicle_id)
+            ->where('alert_type', 'route_deviation')
+            ->where('triggered_at', '>=', now()->subMinutes(15))
+            ->exists();
+        if ($exists) return;
+
+        Alert::create([
+            'alert_type'   => 'route_deviation',
+            'severity'     => 'warning',
+            'vehicle_id'   => $device->vehicle_id,
+            'driver_id'    => $device->driver_id,
+            'device_id'    => $device->id,
+            'title'        => 'Kendaraan Keluar Jalur — ' . optional($device->vehicle)->name,
+            'message'      => "Kendaraan menyimpang " . round($deviationKm, 1) . " km dari jalur menuju {$activeTrip->dest_name}.",
+            'triggered_at' => now(),
+        ]);
+    }
+
+    private function alertUnauthorizedMovement(IotDevice $device, float $lat, float $lng): void
+    {
+        // Throttle: 1 alert per 10 menit per kendaraan
+        $exists = Alert::where('vehicle_id', $device->vehicle_id)
+            ->where('alert_type', 'unauthorized_movement')
+            ->where('triggered_at', '>=', now()->subMinutes(10))
+            ->exists();
+        if ($exists) return;
+
+        Alert::create([
+            'alert_type'   => 'unauthorized_movement',
+            'severity'     => 'warning',
+            'vehicle_id'   => $device->vehicle_id,
+            'driver_id'    => $device->driver_id,
+            'device_id'    => $device->id,
+            'title'        => 'Kendaraan Bergerak Tanpa Trip — ' . optional($device->vehicle)->name,
+            'message'      => "Kendaraan terdeteksi bergerak tanpa perjalanan aktif di koordinat ({$lat}, {$lng}).",
+            'triggered_at' => now(),
+        ]);
+    }
+
+    private function crossTrackDistance(
+        float $lat, float $lng,
+        float $lat1, float $lng1,
+        float $lat2, float $lng2
+    ): float {
+        $R   = 6371.0;
+        $d13 = $this->haversine($lat1, $lng1, $lat, $lng) / $R;
+        $θ13 = deg2rad($this->bearing($lat1, $lng1, $lat, $lng));
+        $θ12 = deg2rad($this->bearing($lat1, $lng1, $lat2, $lng2));
+        return abs(asin(sin($d13) * sin($θ13 - $θ12))) * $R;
+    }
+
+    private function bearing(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $φ1 = deg2rad($lat1);
+        $φ2 = deg2rad($lat2);
+        $Δλ = deg2rad($lng2 - $lng1);
+        $y  = sin($Δλ) * cos($φ2);
+        $x  = cos($φ1) * sin($φ2) - sin($φ1) * cos($φ2) * cos($Δλ);
+        return fmod(rad2deg(atan2($y, $x)) + 360, 360);
     }
 
     private function calcTotalDistance(int $tripId): float

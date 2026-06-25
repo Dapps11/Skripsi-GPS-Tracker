@@ -468,22 +468,22 @@
         {{-- Canvas grafik --}}
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
             <div>
-                <div class="text-xs font-bold text-gray-500 mb-2">PERCLOS & Event Type (over time)</div>
+                <div class="text-xs font-bold text-gray-500 mb-2">PERCLOS & Tipe Event</div>
                 <canvas id="chart-perclos" height="160"></canvas>
             </div>
             <div>
-                <div class="text-xs font-bold text-gray-500 mb-2">EAR & MAR (over time)</div>
-                <canvas id="chart-ear-mar" height="160"></canvas>
+                <div class="text-xs font-bold text-gray-500 mb-2">Kondisi Supir (Status over time)</div>
+                <canvas id="chart-condition" height="160"></canvas>
+            </div>
+            <div>
+                <div class="text-xs font-bold text-gray-500 mb-2">EAR — Eye Aspect Ratio</div>
+                <canvas id="chart-ear" height="160"></canvas>
+            </div>
+            <div>
+                <div class="text-xs font-bold text-gray-500 mb-2">MAR — Mouth Aspect Ratio</div>
+                <canvas id="chart-mar" height="160"></canvas>
             </div>
         </div>
-
-        {{-- DEBUG — hapus setelah dicek --}}
-<div class="p-3 bg-gray-100 text-xs font-mono mt-4">
-    Monitoring events: {{ $monitoringEvents->count() }}<br>
-    Trip departed_at: {{ $trip->departed_at }}<br>
-    Trip arrived_at: {{ $trip->arrived_at }}<br>
-    Trip vehicle_id: {{ $trip->vehicle_id }}
-</div>
 
         {{-- Tabel event alarm --}}
         @if($alarmEvents->count() > 0)

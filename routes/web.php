@@ -27,6 +27,8 @@ Route::middleware('auth')->group(function () {
     Route::prefix('master')->name('master.')->group(function () {
         Route::resource('drivers',  DriverMasterController::class);
         Route::resource('vehicles', VehicleMasterController::class);
+        Route::get('vehicles/{vehicle}/history', [VehicleMasterController::class, 'history'])
+             ->name('vehicles.history');
     });
 
     // JSON polling endpoints
