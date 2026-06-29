@@ -107,6 +107,9 @@ class VehicleMasterController extends Controller
         $date     = $request->input('date', now()->toDateString());
         $startUtc = Carbon::parse($date . ' 00:00:00', 'Asia/Jakarta')->utc();
         $endUtc   = Carbon::parse($date . ' 23:59:59', 'Asia/Jakarta')->utc();
+        
+        $filter      = $request->input('filter', 'day');
+        $filterLabel = Carbon::parse($date)->format('d/m/Y');
 
         $allPoints = DB::table('gps_telemetry')
             ->where('vehicle_id', $vehicle->id)
@@ -199,7 +202,7 @@ class VehicleMasterController extends Controller
             'vehicle', 'date', 'segments', 'signalGaps', 'stops',
             'totalDistKm', 'movingSec', 'maxSpeedKmh', 'count',
             'trips', 'dayAlerts', 'vehicles', 'tripsForMap',
-            'mapType', 'googleMapsKey'
+            'mapType', 'googleMapsKey', 'filter', 'filterLabel'
         ));
     }
 
