@@ -40,6 +40,25 @@
     .gap-bubble-tooltip::before {
         border-top-color: #7c3aed !important;
     }
+
+    /* Chart toggle */
+    .chart-toggle-btn {
+        display:inline-flex; align-items:center; gap:5px;
+        padding:5px 12px; border-radius:8px; border:1.5px solid #e5e7eb;
+        font-size:11px; font-weight:700; color:#6b7280;
+        background:white; cursor:pointer; transition:all .2s;
+    }
+    .chart-toggle-btn:hover { border-color:#22c55e; color:#16a34a; }
+    .chart-toggle-btn.hidden-chart { background:#f3f4f6; color:#9ca3af; }
+    .chart-toggle-btn.hidden-chart:hover { border-color:#dc2626; color:#dc2626; }
+    .chart-container { transition:all .3s ease; overflow:hidden; }
+    .chart-container.collapsed { max-height:0; opacity:0; padding:0; margin:0; }
+
+    /* Info section */
+    .info-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+    .info-item { padding:10px 12px; background:#f9fafb; border-radius:10px; }
+    .info-item-label { font-size:9px; font-weight:700; color:#9ca3af; text-transform:uppercase; letter-spacing:.06em; margin-bottom:3px; }
+    .info-item-value { font-size:13px; font-weight:700; color:#111827; }
 </style>
 @endpush
 
@@ -77,6 +96,9 @@
                     <span class="text-sm font-normal text-gray-400 ml-1">{{ $trip->vehicle->license_plate ?? '' }}</span>
                 </div>
                 <div class="text-sm text-gray-500">👤 {{ $trip->driver->full_name ?? '—' }}</div>
+                @if($trip->notes)
+                <div class="text-xs text-gray-400 mt-1 italic">📝 {{ $trip->notes }}</div>
+                @endif
             </div>
             <div class="flex items-center gap-2 flex-wrap flex-shrink-0">
                 @if($trip->status === 'in_progress')
@@ -96,6 +118,131 @@
         </div>
     </div>
 
+    {{-- Ringkasan Perjalanan --}}
+    @if($trip->departed_at)
+    <div class="card p-5 mb-4">
+        <h3 class="text-sm font-bold text-gray-900 mb-3">📋 Ringkasan Perjalanan</h3>
+        <div class="info-grid" style="grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));">
+            {{-- Waktu Berangkat --}}
+            <div class="info-item">
+                <div class="info-item-label">Waktu Berangkat</div>
+                <div class="info-item-value">{{ \Carbon\Carbon::parse($trip->departed_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB</div>
+            </div>
+            {{-- Waktu Tiba --}}
+            <div class="info-item">
+                <div class="info-item-label">Waktu Tiba</div>
+                <div class="info-item-value">
+                    @if($trip->arrived_at)
+                        {{ \Carbon\Carbon::parse($trip->arrived_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB
+                    @else
+                        <span style="color:#f97316;">Masih berjalan...</span>
+                    @endif
+                </div>
+            </div>
+            {{-- Durasi Aktual --}}
+            <div class="info-item">
+                <div class="info-item-label">Durasi Aktual</div>
+                <div class="info-item-value">
+                    @php
+                        $endTime = $trip->arrived_at ?? now();
+                        $durMinutes = (int) \Carbon\Carbon::parse($trip->departed_at)->diffInMinutes($endTime);
+                        $durH = intdiv($durMinutes, 60);
+                        $durM = $durMinutes % 60;
+                    @endphp
+                    {{ $durH > 0 ? "{$durH}j {$durM}m" : "{$durM} menit" }}
+                </div>
+            </div>
+            {{-- Jarak --}}
+            <div class="info-item">
+                <div class="info-item-label">Jarak Tempuh</div>
+                <div class="info-item-value">{{ $trip->total_distance_km ? number_format($trip->total_distance_km, 1) . ' km' : 'Menghitung...' }}</div>
+            </div>
+            {{-- Kecepatan --}}
+            @if($gpsPoints->count() > 0)
+            @php
+                $speeds = $gpsPoints->pluck('speed_kmh')->filter(fn($s) => $s > 0);
+                $maxSpd = $speeds->count() ? (int) round($speeds->max()) : 0;
+                $avgSpd = $speeds->count() ? (int) round($speeds->avg()) : 0;
+            @endphp
+            <div class="info-item">
+                <div class="info-item-label">Kecepatan Rata-rata</div>
+                <div class="info-item-value">{{ $avgSpd }} km/h</div>
+            </div>
+            <div class="info-item">
+                <div class="info-item-label">Kecepatan Maks</div>
+                <div class="info-item-value">{{ $maxSpd }} km/h</div>
+            </div>
+            @endif
+            {{-- Total Stop Time --}}
+            @if(count($stops) > 0)
+            @php
+                $totalStopSec = collect($stops)->sum('duration_seconds');
+                $stopMin = intdiv($totalStopSec, 60);
+                $stopSec = $totalStopSec % 60;
+            @endphp
+            <div class="info-item">
+                <div class="info-item-label">Total Berhenti</div>
+                <div class="info-item-value" style="color:#dc2626;">{{ count($stops) }}× · {{ $stopMin > 0 ? "{$stopMin}m {$stopSec}d" : "{$stopSec}d" }}</div>
+            </div>
+            @endif
+            {{-- Signal Gaps --}}
+            @if(!empty($signalGaps))
+            @php
+                $totalGapSec = collect($signalGaps)->sum('duration_sec');
+                $gapMin = intdiv($totalGapSec, 60);
+                $gapSec = $totalGapSec % 60;
+            @endphp
+            <div class="info-item" style="background:#faf5ff;border:1px solid #ede9fe;">
+                <div class="info-item-label" style="color:#7c3aed;">Sinyal Terputus</div>
+                <div class="info-item-value" style="color:#7c3aed;">{{ count($signalGaps) }}× · {{ $gapMin > 0 ? "{$gapMin}m {$gapSec}d" : "{$gapSec}d" }}</div>
+            </div>
+            @endif
+            {{-- Route Deviations --}}
+            @if(!empty($routeDeviations))
+            <div class="info-item" style="background:#fffbeb;border:1px solid #fde68a;">
+                <div class="info-item-label" style="color:#d97706;">🚧 Keluar Jalur</div>
+                <div class="info-item-value" style="color:#d97706;">{{ count($routeDeviations) }} kali</div>
+            </div>
+            @endif
+            {{-- Deteksi Kantuk --}}
+            @if($monitoringEvents->count() > 0)
+            @php
+                $alarmCnt = $monitoringEvents->where('is_alarm', 1)->count();
+                $drowsyCnt = $monitoringEvents->whereIn('event_type', ['drowsy', 'drowsy_warning'])->count();
+            @endphp
+            <div class="info-item" style="background:#fff7ed;border:1px solid #fed7aa;">
+                <div class="info-item-label" style="color:#c2410c;">⚠️ Deteksi Kantuk</div>
+                <div class="info-item-value" style="color:#dc2626;">{{ $alarmCnt }} alarm · {{ $drowsyCnt }} drowsy</div>
+            </div>
+            @endif
+            {{-- ETA vs Aktual --}}
+            @if($etaHaversine && $trip->arrived_at)
+            @php
+                $actualMin = (int) \Carbon\Carbon::parse($trip->departed_at)->diffInMinutes($trip->arrived_at);
+                $diff = $actualMin - $etaHaversine;
+            @endphp
+            <div class="info-item">
+                <div class="info-item-label">ETA vs Aktual</div>
+                <div class="info-item-value">
+                    @if($diff > 5)
+                        <span style="color:#dc2626;">Terlambat +{{ $diff }} menit</span>
+                    @elseif($diff < -5)
+                        <span style="color:#16a34a;">Lebih cepat {{ abs($diff) }} menit</span>
+                    @else
+                        <span style="color:#16a34a;">Tepat waktu ✓</span>
+                    @endif
+                </div>
+            </div>
+            @endif
+            {{-- Device --}}
+            <div class="info-item">
+                <div class="info-item-label">Device / GPS Points</div>
+                <div class="info-item-value">{{ $trip->device->device_id ?? '—' }} · {{ $gpsPoints->count() }} titik</div>
+            </div>
+        </div>
+    </div>
+    @endif
+
     {{-- Main Content --}}
     <div class="grid grid-cols-1 lg:grid-cols-4 gap-4 mb-4">
 
@@ -114,6 +261,9 @@
                         <div>
                             <div class="text-[9px] font-bold text-green-600 uppercase tracking-wider mb-0.5">Start</div>
                             <div class="text-sm font-semibold text-gray-900 leading-tight">{{ $trip->origin_name }}</div>
+                            @if($trip->origin_address)
+                            <div class="text-xs text-gray-400 mt-0.5">{{ $trip->origin_address }}</div>
+                            @endif
                             @if($trip->departed_at)
                             <div class="text-xs text-gray-400 mt-0.5">
                                 {{ \Carbon\Carbon::parse($trip->departed_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB
@@ -125,6 +275,9 @@
                         <div>
                             <div class="text-[9px] font-bold text-red-500 uppercase tracking-wider mb-0.5">Tujuan</div>
                             <div class="text-sm font-semibold text-gray-900 leading-tight">{{ $trip->dest_name }}</div>
+                            @if($trip->dest_address)
+                            <div class="text-xs text-gray-400 mt-0.5">{{ $trip->dest_address }}</div>
+                            @endif
                             @if($trip->arrived_at)
                             <div class="text-xs text-gray-400 mt-0.5">
                                 Tiba: {{ \Carbon\Carbon::parse($trip->arrived_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB
@@ -251,6 +404,22 @@
                 </div>
                 @endif
 
+                @if(!empty($routeDeviations))
+                <div class="stat-box" style="border:1px solid #fde68a;background:#fffbeb;">
+                    <div class="stat-label" style="color:#d97706;">🚧 Keluar Jalur</div>
+                    <div class="stat-value" style="color:#d97706;">
+                        {{ count($routeDeviations) }}
+                        <span class="stat-unit">kali</span>
+                    </div>
+                    @php
+                        $maxDevDist = collect($routeDeviations)->max('max_distance_m');
+                        $totalDevSec = collect($routeDeviations)->sum('duration_sec');
+                        $devMin = intdiv($totalDevSec, 60);
+                    @endphp
+                    <div style="font-size:10px;color:#9ca3af;margin-top:2px;">maks {{ $maxDevDist }}m, total {{ $devMin }}m</div>
+                </div>
+                @endif
+
                 <div class="stat-box">
                     <div class="stat-label">Device</div>
                     <div style="font-size:11px;font-weight:700;color:#111827;margin-top:4px;word-break:break-all;">
@@ -327,6 +496,12 @@
                 <div class="legend-item">
                     <div class="legend-dot" style="background:#7c3aed;box-shadow:0 0 0 2px #7c3aed55;"></div>
                     <span style="color:#7c3aed;font-weight:600;">Sinyal Terputus ({{ count($signalGaps) }})</span>
+                </div>
+                @endif
+                @if(!empty($routeDeviations))
+                <div class="legend-item">
+                    <div class="legend-dot" style="background:#d97706;box-shadow:0 0 0 2px #d9770655;"></div>
+                    <span style="color:#d97706;font-weight:600;">Keluar Jalur ({{ count($routeDeviations) }})</span>
                 </div>
                 @endif
             </div>
@@ -465,21 +640,49 @@
         </div>
         @endif
 
+        {{-- Chart Toggle Buttons --}}
+        <div class="flex flex-wrap gap-2 mb-4">
+            <button type="button" class="chart-toggle-btn" onclick="toggleChart('perclos')" id="toggle-perclos">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                PERCLOS
+            </button>
+            <button type="button" class="chart-toggle-btn" onclick="toggleChart('condition')" id="toggle-condition">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                Kondisi Supir
+            </button>
+            <button type="button" class="chart-toggle-btn" onclick="toggleChart('ear')" id="toggle-ear">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                EAR
+            </button>
+            <button type="button" class="chart-toggle-btn" onclick="toggleChart('mar')" id="toggle-mar">
+                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
+                </svg>
+                MAR
+            </button>
+        </div>
+
         {{-- Canvas grafik --}}
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div>
+            <div id="chart-wrap-perclos" class="chart-container">
                 <div class="text-xs font-bold text-gray-500 mb-2">PERCLOS & Tipe Event</div>
                 <canvas id="chart-perclos" height="160"></canvas>
             </div>
-            <div>
+            <div id="chart-wrap-condition" class="chart-container">
                 <div class="text-xs font-bold text-gray-500 mb-2">Kondisi Supir (Status over time)</div>
                 <canvas id="chart-condition" height="160"></canvas>
             </div>
-            <div>
+            <div id="chart-wrap-ear" class="chart-container">
                 <div class="text-xs font-bold text-gray-500 mb-2">EAR — Eye Aspect Ratio</div>
                 <canvas id="chart-ear" height="160"></canvas>
             </div>
-            <div>
+            <div id="chart-wrap-mar" class="chart-container">
                 <div class="text-xs font-bold text-gray-500 mb-2">MAR — Mouth Aspect Ratio</div>
                 <canvas id="chart-mar" height="160"></canvas>
             </div>
@@ -549,7 +752,28 @@ window.__tripshow = {
     gpsSegments:      @json($gpsSegments ?? []),
     signalGaps:       @json($signalGaps ?? []),
     monitoringEvents: @json($monitoringForChart),
+    routeDeviations:  @json($routeDeviations ?? []),
 };
+
+// ── Toggle grafik ────────────────────────────────────────────────
+function toggleChart(chartId) {
+    const wrap = document.getElementById('chart-wrap-' + chartId);
+    const btn  = document.getElementById('toggle-' + chartId);
+    if (!wrap || !btn) return;
+
+    const isCollapsed = wrap.classList.toggle('collapsed');
+    btn.classList.toggle('hidden-chart', isCollapsed);
+
+    // Resize chart when showing again
+    if (!isCollapsed) {
+        setTimeout(() => {
+            const canvas = wrap.querySelector('canvas');
+            if (canvas && canvas.__chartInstance) {
+                canvas.__chartInstance.resize();
+            }
+        }, 350);
+    }
+}
 </script>
 <script src="{{ asset('js/trips-show.js') }}"></script>
 @if($monitoringEvents->count() > 0)

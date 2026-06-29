@@ -256,9 +256,23 @@ class TripController extends Controller
             $gpsSegments[] = $currentSegment;
         }
 
+        // ── Deteksi keluar jalur (route deviation) ──────────────────
+        $routeDeviations = [];
+        if ($trip->origin_lat && $trip->dest_lat && $gpsPoints->count() >= 2) {
+            $routeDeviations = $this->detectRouteDeviations(
+                $gpsPoints,
+                $trip->origin_lat, $trip->origin_lng,
+                $trip->dest_lat,   $trip->dest_lng,
+                500,   // maxDistanceMeters
+                3,     // minDurationMinutes
+                2      // minOccurrences
+            );
+        }
+
         return view('trips.show', compact(
             'trip', 'gpsPoints', 'gpsPointsForMap', 'mapType', 'googleMapsKey',
-            'etaHaversine', 'stops', 'monitoringEvents', 'monitoringForChart','gpsSegments', 'signalGaps'
+            'etaHaversine', 'stops', 'monitoringEvents', 'monitoringForChart',
+            'gpsSegments', 'signalGaps', 'routeDeviations'
         ));
     }
 
@@ -480,6 +494,115 @@ class TripController extends Controller
         $a    = sin($dLat/2)**2
             + cos(deg2rad($lat1)) * cos(deg2rad($lat2)) * sin($dLng/2)**2;
         return $R * 2 * atan2(sqrt($a), sqrt(1-$a));
+    }
+
+    /**
+     * Hitung jarak titik ke garis (origin→dest) menggunakan cross-track distance.
+     * Return dalam meter.
+     */
+    private function pointToLineDist(float $ptLat, float $ptLng, float $oLat, float $oLng, float $dLat, float $dLng): float
+    {
+        $R = 6371000; // bumi dalam meter
+        $distOP = $this->haversine($oLat, $oLng, $ptLat, $ptLng) * 1000; // meter
+        $bearOP = deg2rad($this->initialBearing($oLat, $oLng, $ptLat, $ptLng));
+        $bearOD = deg2rad($this->initialBearing($oLat, $oLng, $dLat, $dLng));
+
+        // Cross-track distance
+        $xtd = abs(asin(sin($distOP / $R) * sin($bearOP - $bearOD)) * $R);
+        return $xtd;
+    }
+
+    private function initialBearing(float $lat1, float $lng1, float $lat2, float $lng2): float
+    {
+        $lat1 = deg2rad($lat1); $lat2 = deg2rad($lat2);
+        $dLng = deg2rad($lng2 - $lng1);
+        $y = sin($dLng) * cos($lat2);
+        $x = cos($lat1) * sin($lat2) - sin($lat1) * cos($lat2) * cos($dLng);
+        return fmod(rad2deg(atan2($y, $x)) + 360, 360);
+    }
+
+    /**
+     * Deteksi keluar jalur dari koridor origin→dest.
+     *
+     * @param  \Illuminate\Support\Collection $gpsPoints
+     * @param  float $oLat Origin latitude
+     * @param  float $oLng Origin longitude
+     * @param  float $dLat Destination latitude
+     * @param  float $dLng Destination longitude
+     * @param  int   $maxDistanceMeters Threshold jarak keluar koridor
+     * @param  int   $minDurationMinutes Durasi minimum deviasi
+     * @param  int   $minOccurrences Jumlah minimum deviasi untuk ditampilkan
+     * @return array List of route deviations
+     */
+    private function detectRouteDeviations($gpsPoints, float $oLat, float $oLng, float $dLat, float $dLng, int $maxDistanceMeters = 500, int $minDurationMinutes = 3, int $minOccurrences = 2): array
+    {
+        $pts     = $gpsPoints->values();
+        $total   = $pts->count();
+        if ($total < 2) return [];
+
+        $parseUTC = fn($pt) => \Carbon\Carbon::parse(
+            $pt->gps_timestamp->format('Y-m-d H:i:s'), 'UTC'
+        );
+
+        $raw = [];
+        $i   = 0;
+        while ($i < $total) {
+            $pt = $pts[$i];
+            $dist = $this->pointToLineDist(
+                (float)$pt->latitude, (float)$pt->longitude,
+                $oLat, $oLng, $dLat, $dLng
+            );
+
+            if ($dist > $maxDistanceMeters) {
+                // Start of deviation
+                $startIdx = $i;
+                $maxDist  = $dist;
+                $j = $i;
+
+                while ($j + 1 < $total) {
+                    $nextDist = $this->pointToLineDist(
+                        (float)$pts[$j + 1]->latitude, (float)$pts[$j + 1]->longitude,
+                        $oLat, $oLng, $dLat, $dLng
+                    );
+                    if ($nextDist > $maxDistanceMeters) {
+                        $maxDist = max($maxDist, $nextDist);
+                        $j++;
+                    } else {
+                        break;
+                    }
+                }
+
+                $startTime = $parseUTC($pts[$startIdx]);
+                $endTime   = $parseUTC($pts[$j]);
+                $durMin    = $startTime->diffInSeconds($endTime) / 60;
+
+                if ($durMin >= $minDurationMinutes) {
+                    $midIdx = $startIdx + intdiv($j - $startIdx, 2);
+                    $midPt  = $pts[$midIdx];
+                    $raw[] = [
+                        'lat'          => (float) $midPt->latitude,
+                        'lng'          => (float) $midPt->longitude,
+                        'max_distance_m' => (int) round($maxDist),
+                        'started_at'   => $startTime->setTimezone('Asia/Jakarta')->format('H:i:s'),
+                        'ended_at'     => $endTime->setTimezone('Asia/Jakarta')->format('H:i:s'),
+                        'duration_sec' => (int) $startTime->diffInSeconds($endTime),
+                        'duration_label' => $durMin >= 60
+                            ? intdiv((int)$durMin, 60) . 'j ' . ((int)$durMin % 60) . 'm'
+                            : ((int)$durMin) . ' menit',
+                    ];
+                }
+                $i = $j + 1;
+            } else {
+                $i++;
+            }
+        }
+
+        // Hanya tampilkan jika jumlah deviasi >= minOccurrences
+        if (count($raw) < $minOccurrences) {
+            return [];
+        }
+
+        return $raw;
     }
 
     public function edit(Trip $trip)

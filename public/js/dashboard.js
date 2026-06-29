@@ -55,25 +55,29 @@ new Chart(document.getElementById('chart-trip-daily'), {
     }
 });
 
-// ── Chart 2: Drowsy events per hari ──────────────────────────────
+// ── Chart 2: Drowsy & Alarm BERSEBELAHAN (grouped, BUKAN stacked) ─
 new Chart(document.getElementById('chart-drowsy-daily'), {
     type: 'bar',
     data: {
         labels: chartDays,
         datasets: [
             {
-                label: 'Drowsy Events',
+                label: 'Deteksi Kantuk',
                 data: chartDrowsy,
-                backgroundColor: 'rgba(249,115,22,.7)',
+                backgroundColor: 'rgba(249,115,22,.75)',
+                borderColor: 'rgba(249,115,22,1)',
+                borderWidth: 1,
                 borderRadius: 5,
-                stack: 's1',
+                // Tidak ada stack → grouped secara default
             },
             {
                 label: 'Alarm Aktif',
                 data: chartAlarms,
-                backgroundColor: 'rgba(220,38,38,.85)',
+                backgroundColor: 'rgba(220,38,38,.8)',
+                borderColor: 'rgba(220,38,38,1)',
+                borderWidth: 1,
                 borderRadius: 5,
-                stack: 's1',
+                // Tidak ada stack → grouped secara default
             }
         ]
     },
@@ -84,8 +88,8 @@ new Chart(document.getElementById('chart-drowsy-daily'), {
             legend: { position: 'top', labels: { font: { size: 11 }, boxWidth: 12, padding: 12 } }
         },
         scales: {
-            x: { grid: { color: gridColor }, ticks: { font: tickFont }, stacked: true },
-            y: { grid: { color: gridColor }, ticks: { font: tickFont, stepSize: 1 }, beginAtZero: true, stacked: true }
+            x: { grid: { color: gridColor }, ticks: { font: tickFont } },
+            y: { grid: { color: gridColor }, ticks: { font: tickFont, stepSize: 1 }, beginAtZero: true }
         }
     }
 });

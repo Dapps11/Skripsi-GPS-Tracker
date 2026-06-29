@@ -15,6 +15,21 @@
 .badge-warning  { background:#fef3c7; color:#92400e; }
 .badge-critical { background:#fee2e2; color:#991b1b; }
 .badge-info     { background:#dbeafe; color:#1e40af; }
+
+/* Filter */
+.filter-btn {
+    padding:6px 14px; border-radius:10px; font-size:12px; font-weight:700;
+    border:1.5px solid #e5e7eb; background:white; color:#6b7280;
+    cursor:pointer; transition:all .2s ease;
+}
+.filter-btn:hover { border-color:#22c55e; color:#16a34a; }
+.filter-btn.active { background:#22c55e; border-color:#22c55e; color:white; }
+.filter-input {
+    padding:6px 12px; border-radius:10px; font-size:12px; font-weight:600;
+    border:1.5px solid #e5e7eb; background:white; color:#374151;
+    outline:none; transition:border-color .2s;
+}
+.filter-input:focus { border-color:#22c55e; }
 </style>
 @endpush
 
@@ -25,7 +40,7 @@
     <div class="flex flex-wrap items-center justify-between gap-3">
         <div>
             <h1 class="text-xl font-extrabold text-gray-900">Riwayat Harian Kendaraan</h1>
-            <p class="text-xs text-gray-400 mt-0.5">Track pergerakan kendaraan dalam satu hari</p>
+            <p class="text-xs text-gray-400 mt-0.5">Track pergerakan kendaraan dalam periode tertentu</p>
         </div>
         <a href="{{ route('master.vehicles.index') }}" class="text-xs text-gray-500 hover:text-gray-800 flex items-center gap-1">
             <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
@@ -37,29 +52,77 @@
 
     {{-- Filter Bar --}}
     <div class="card p-4">
-        <form method="GET" action="{{ route('master.vehicles.history', $vehicle) }}" class="flex flex-wrap gap-3 items-end">
-            <div>
-                <label class="block text-xs font-bold text-gray-500 mb-1">Kendaraan</label>
-                <select name="vehicle_id" id="vehicle-select"
-                        class="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-green-400 bg-white">
-                    @foreach($vehicles as $v)
-                    <option value="{{ $v->id }}"
-                        {{ $v->id == $vehicle->id ? 'selected' : '' }}
-                        data-url="{{ route('master.vehicles.history', $v) }}">
-                        {{ $v->name }} ({{ $v->license_plate }})
-                    </option>
-                    @endforeach
-                </select>
+        <form method="GET" action="{{ route('master.vehicles.history', $vehicle) }}" class="space-y-3">
+            <div class="flex flex-wrap gap-3 items-end">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 mb-1">Kendaraan</label>
+                    <select name="vehicle_id" id="vehicle-select"
+                            class="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-green-400 bg-white">
+                        @foreach($vehicles as $v)
+                        <option value="{{ $v->id }}"
+                            {{ $v->id == $vehicle->id ? 'selected' : '' }}
+                            data-url="{{ route('master.vehicles.history', $v) }}">
+                            {{ $v->name }} ({{ $v->license_plate }})
+                        </option>
+                        @endforeach
+                    </select>
+                </div>
             </div>
-            <div>
-                <label class="block text-xs font-bold text-gray-500 mb-1">Tanggal</label>
-                <input type="date" name="date" id="date-input" value="{{ $date }}" max="{{ now()->toDateString() }}"
+
+            {{-- Period Filter --}}
+            <div class="flex flex-wrap gap-2 items-center">
+                <button type="submit" name="filter" value="day"
+                        class="filter-btn {{ $filter === 'day' ? 'active' : '' }}">
+                    📅 Hari Ini
+                </button>
+                <button type="submit" name="filter" value="week"
+                        class="filter-btn {{ $filter === 'week' ? 'active' : '' }}">
+                    📅 Minggu Ini
+                </button>
+                <button type="submit" name="filter" value="month"
+                        class="filter-btn {{ $filter === 'month' ? 'active' : '' }}">
+                    📆 Bulan Ini
+                </button>
+
+                <div style="display:flex;align-items:center;gap:6px;margin-left:4px;">
+                    <span style="font-size:11px;font-weight:700;color:#9ca3af;">RANGE:</span>
+                    <input type="date" name="start_date"
+                           value="{{ $startDate ?? $date }}"
+                           class="filter-input" style="width:140px;">
+                    <span style="font-size:11px;color:#9ca3af;">s/d</span>
+                    <input type="date" name="end_date"
+                           value="{{ $endDate ?? $date }}"
+                           max="{{ now()->toDateString() }}"
+                           class="filter-input" style="width:140px;">
+                    <button type="submit" name="filter" value="custom"
+                            class="filter-btn {{ $filter === 'custom' ? 'active' : '' }}">
+                        🔍 Terapkan
+                    </button>
+                </div>
+
+                @if($filter !== 'day')
+                <a href="{{ route('master.vehicles.history', $vehicle) }}"
+                   style="font-size:11px;color:#9ca3af;text-decoration:none;margin-left:4px;"
+                   onmouseover="this.style.color='#dc2626'" onmouseout="this.style.color='#9ca3af'">✕ Reset</a>
+                @endif
+            </div>
+
+            {{-- Hidden date for day filter --}}
+            @if($filter === 'day')
+            <div class="flex items-center gap-3">
+                <label class="text-xs font-bold text-gray-500">Tanggal:</label>
+                <input type="date" name="date" value="{{ $date }}" max="{{ now()->toDateString() }}"
                        class="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-green-400">
+                <button type="submit" name="filter" value="day"
+                        class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-bold rounded-lg transition">
+                    Tampilkan
+                </button>
             </div>
-            <button type="submit"
-                    class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-bold rounded-lg transition">
-                Tampilkan
-            </button>
+            @endif
+
+            <div style="font-size:11px;color:#9ca3af;font-weight:600;">
+                📊 Menampilkan data: <span style="color:#111827;">{{ $filterLabel }}</span>
+            </div>
         </form>
     </div>
 
@@ -95,7 +158,7 @@
     <div class="card overflow-hidden">
         <div class="px-4 py-3 border-b border-gray-100 flex flex-wrap items-center justify-between gap-2">
             <span class="text-sm font-bold text-gray-700">
-                Peta Pergerakan — {{ \Carbon\Carbon::parse($date)->translatedFormat('d F Y') }}
+                Peta Pergerakan — {{ $filterLabel }}
             </span>
             <div class="flex flex-wrap items-center gap-3">
                 {{-- Legend --}}
@@ -104,10 +167,16 @@
                         <span class="inline-block w-4 h-1 rounded" style="background:#f97316;"></span>
                         Di luar trip
                     </span>
+                    @foreach($tripsForMap as $i => $t)
+                    @php
+                        $tripColors = ['#3b82f6','#ef4444','#10b981','#8b5cf6','#f59e0b','#ec4899','#06b6d4','#84cc16','#6366f1','#14b8a6'];
+                        $tc = $tripColors[$i % count($tripColors)];
+                    @endphp
                     <span class="flex items-center gap-1">
-                        <span class="inline-block w-4 h-1 bg-blue-500 rounded"></span>
-                        Dalam trip
+                        <span class="inline-block w-4 h-1 rounded" style="background:{{ $tc }};"></span>
+                        {{ $t['trip_code'] }}
                     </span>
+                    @endforeach
                     <span class="flex items-center gap-1">
                         <span style="display:inline-block;width:12px;height:12px;background:#dc2626;border-radius:50%;border:2px solid white;box-shadow:0 0 0 3px #dc262640;flex-shrink:0;"></span>
                         Stop
@@ -128,10 +197,10 @@
         {{-- Trips that day --}}
         <div class="card">
             <div class="px-4 py-3 border-b border-gray-100">
-                <span class="text-sm font-bold text-gray-700">Trip Hari Ini ({{ $trips->count() }})</span>
+                <span class="text-sm font-bold text-gray-700">Trip Periode Ini ({{ $trips->count() }})</span>
             </div>
             @if($trips->isEmpty())
-            <div class="px-4 py-8 text-center text-sm text-gray-400">Tidak ada trip pada tanggal ini</div>
+            <div class="px-4 py-8 text-center text-sm text-gray-400">Tidak ada trip pada periode ini</div>
             @else
             <ul class="divide-y divide-gray-50">
                 @foreach($trips as $trip)
@@ -162,10 +231,10 @@
         {{-- Alerts that day --}}
         <div class="card">
             <div class="px-4 py-3 border-b border-gray-100">
-                <span class="text-sm font-bold text-gray-700">Alert Hari Ini ({{ $dayAlerts->count() }})</span>
+                <span class="text-sm font-bold text-gray-700">Alert Periode Ini ({{ $dayAlerts->count() }})</span>
             </div>
             @if($dayAlerts->isEmpty())
-            <div class="px-4 py-8 text-center text-sm text-gray-400">Tidak ada alert pada tanggal ini</div>
+            <div class="px-4 py-8 text-center text-sm text-gray-400">Tidak ada alert pada periode ini</div>
             @else
             <ul class="divide-y divide-gray-50 max-h-64 overflow-y-auto">
                 @foreach($dayAlerts as $alert)
@@ -213,11 +282,18 @@ window.__historymap = {
     const stops      = CFG.stops      ?? [];
     const trips      = CFG.trips      ?? [];
 
-    // ── Shared helpers ────────────────────────────────────────────
-    // Each point has trip_id: null=outside trip, number=inside trip
-    // Color: orange=no trip, blue=in trip
+    // ── Palet warna per trip_id ──────────────────────────────────
+    const TRIP_COLORS = ['#3b82f6','#ef4444','#10b981','#8b5cf6','#f59e0b','#ec4899','#06b6d4','#84cc16','#6366f1','#14b8a6'];
+    const tripIdToColor = {};
+    let colorIdx = 0;
+
     function trackColor(tripId) {
-        return tripId != null ? '#3b82f6' : '#f97316';
+        if (tripId == null) return '#f97316'; // no trip = orange
+        if (!tripIdToColor[tripId]) {
+            tripIdToColor[tripId] = TRIP_COLORS[colorIdx % TRIP_COLORS.length];
+            colorIdx++;
+        }
+        return tripIdToColor[tripId];
     }
 
     // Split a segment array into sub-segments by trip_id changes
@@ -324,15 +400,16 @@ window.__historymap = {
         }
 
         // Trip origin / dest markers
-        trips.forEach(t => {
+        trips.forEach((t, idx) => {
+            const color = TRIP_COLORS[idx % TRIP_COLORS.length];
             if (t.origin_lat) {
                 L.circleMarker([+t.origin_lat, +t.origin_lng], {
-                    radius: 7, fillColor: '#3b82f6', color: '#1d4ed8', weight: 1.5, fillOpacity: .9,
+                    radius: 7, fillColor: color, color: '#fff', weight: 1.5, fillOpacity: .9,
                 }).addTo(map).bindPopup(`<b>Asal</b>: ${t.origin_name}<br><small>${t.trip_code}</small>`);
             }
             if (t.dest_lat) {
                 L.circleMarker([+t.dest_lat, +t.dest_lng], {
-                    radius: 7, fillColor: '#f97316', color: '#c2410c', weight: 1.5, fillOpacity: .9,
+                    radius: 7, fillColor: color, color: '#fff', weight: 1.5, fillOpacity: .9,
                 }).addTo(map).bindPopup(`<b>Tujuan</b>: ${t.dest_name}<br><small>${t.trip_code}</small>`);
             }
         });
@@ -454,17 +531,18 @@ window.__historymap = {
                 title: 'Terakhir' });
         }
 
-        // Trip markers
+        // Trip markers with unique colors
         const tripInfoWin = new google.maps.InfoWindow();
-        trips.forEach(t => {
+        trips.forEach((t, idx) => {
+            const color = TRIP_COLORS[idx % TRIP_COLORS.length];
             [
-                { lat: t.origin_lat, lng: t.origin_lng, label: `Asal: ${t.origin_name}`, color: '#3b82f6' },
-                { lat: t.dest_lat,   lng: t.dest_lng,   label: `Tujuan: ${t.dest_name}`, color: '#f97316' },
-            ].forEach(({ lat, lng, label, color }) => {
+                { lat: t.origin_lat, lng: t.origin_lng, label: `Asal: ${t.origin_name}`, c: color },
+                { lat: t.dest_lat,   lng: t.dest_lng,   label: `Tujuan: ${t.dest_name}`, c: color },
+            ].forEach(({ lat, lng, label, c }) => {
                 if (!lat) return;
                 const mk = new google.maps.Marker({ position: { lat: +lat, lng: +lng }, map: gMap,
                     icon: { path: google.maps.SymbolPath.CIRCLE, scale: 7,
-                        fillColor: color, fillOpacity: .9, strokeColor: '#fff', strokeWeight: 2 } });
+                        fillColor: c, fillOpacity: .9, strokeColor: '#fff', strokeWeight: 2 } });
                 mk.addListener('click', () => {
                     tripInfoWin.setContent(`<b>${label}</b><br><small>${t.trip_code}</small>`);
                     tripInfoWin.open(gMap, mk);
@@ -485,8 +563,7 @@ window.__historymap = {
     // Vehicle dropdown redirect
     document.getElementById('vehicle-select')?.addEventListener('change', function () {
         const url  = this.options[this.selectedIndex].dataset.url;
-        const date = document.getElementById('date-input').value;
-        if (url) window.location = url + '?date=' + date;
+        if (url) window.location = url;
     });
 })();
 </script>

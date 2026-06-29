@@ -7,6 +7,7 @@ const gpsSegments = window.__tripshow?.gpsSegments ?? [];
 const signalGaps   = window.__tripshow?.signalGaps  ?? [];
 const trip      = window.__tripshow?.trip ?? null;
 const stopEvents= window.__tripshow?.stopEvents ?? [];
+const routeDeviations = window.__tripshow?.routeDeviations ?? [];
 
 
 // Helper sample points
@@ -161,6 +162,23 @@ async function initOSMHistory() {
                 `<div style="font-weight:700;color:#dc2626;">⏱️ Stop ${stop.duration_label}</div>
                  <div style="font-size:10px;color:#6b7280;margin-top:4px;">${stop.started_at} — ${stop.ended_at}</div>`
             );
+        });
+    }
+
+    // ── Route deviation markers (amber) ──────────────────────────
+    if (routeDeviations && routeDeviations.length) {
+        const devIcon = L.divIcon({
+            html: `<div style="width:16px;height:16px;background:#d97706;border-radius:50%;border:3px solid white;box-shadow:0 0 0 4px #d9770640;display:flex;align-items:center;justify-content:center;"><div style="width:5px;height:5px;background:white;border-radius:50%;"></div></div>`,
+            iconSize: [16, 16], iconAnchor: [8, 8], className: ''
+        });
+        routeDeviations.forEach(dev => {
+            L.marker([dev.lat, dev.lng], { icon: devIcon, zIndexOffset: 550 })
+             .addTo(map)
+             .bindPopup(
+                 `<div style="font-weight:700;color:#d97706;">🚧 Keluar Jalur</div>
+                  <div style="font-size:10px;color:#6b7280;margin-top:4px;">${dev.started_at} — ${dev.ended_at} (${dev.duration_label})</div>
+                  <div style="font-size:10px;color:#d97706;margin-top:2px;">Jarak maks: ${dev.max_distance_m}m dari koridor</div>`
+             );
         });
     }
 
@@ -339,6 +357,31 @@ window.createGHistory = function () {
                      <div style="font-size:11px;color:#6b7280;margin-top:4px;">${stop.started_at} — ${stop.ended_at}</div>`
                 );
                 stopInfoWindow.open(gMap, stopMarker);
+            });
+        });
+    }
+
+    // ── Route deviation markers (amber) ──────────────────────────
+    if (routeDeviations && routeDeviations.length) {
+        const devInfoWin = new google.maps.InfoWindow();
+        routeDeviations.forEach(dev => {
+            const devMk = new google.maps.Marker({
+                position: { lat: dev.lat, lng: dev.lng },
+                map: gMap,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 8, fillColor: '#d97706', fillOpacity: 1,
+                    strokeColor: 'white', strokeWeight: 3,
+                },
+                zIndex: 950,
+            });
+            devMk.addListener('click', () => {
+                devInfoWin.setContent(
+                    `<div style="font-weight:700;color:#d97706;font-size:12px;">🚧 Keluar Jalur</div>
+                     <div style="font-size:11px;color:#6b7280;margin-top:4px;">${dev.started_at} — ${dev.ended_at} (${dev.duration_label})</div>
+                     <div style="font-size:11px;color:#d97706;margin-top:2px;">Jarak maks: ${dev.max_distance_m}m dari koridor</div>`
+                );
+                devInfoWin.open(gMap, devMk);
             });
         });
     }
