@@ -269,10 +269,52 @@ class TripController extends Controller
             );
         }
 
+        // ── Grafik 1 & 2 (Intensitas Alarm & Kewaspadaan) ──────────────────
+        $intensityChart = [];
+        $alertChart = [];
+        $spanMin = 0;
+        
+        if ($monitoringEvents->count() > 0) {
+            $firstEv = $monitoringEvents->first();
+            $lastEv  = $monitoringEvents->last();
+            $startMs = $trip->departed_at ? \Carbon\Carbon::parse($trip->departed_at)->getTimestampMs() : \Carbon\Carbon::parse($firstEv->event_timestamp)->getTimestampMs();
+            $endMs   = $trip->arrived_at ? \Carbon\Carbon::parse($trip->arrived_at)->getTimestampMs() : \Carbon\Carbon::parse($lastEv->event_timestamp)->getTimestampMs();
+            if ($endMs <= $startMs) { $endMs = $startMs + 60000; }
+            $spanMin = max(1, (int) ceil(($endMs - $startMs) / 60000));
+
+            // Grafik 1: Intensitas Alarm
+            $alarmBins = array_fill(0, $spanMin, 0);
+            foreach ($monitoringEvents->where('is_alarm', 1) as $a) {
+                $idx = (int) floor((\Carbon\Carbon::parse($a->event_timestamp)->getTimestampMs() - $startMs) / 60000);
+                if ($idx >= 0 && $idx < $spanMin) $alarmBins[$idx]++;
+            }
+            for ($i = 0; $i < $spanMin; $i++) {
+                $intensityChart[] = ['x' => $startMs + $i * 60000, 'y' => $alarmBins[$i]];
+            }
+
+            // Grafik 2: Tingkat Kewaspadaan (Terendah per Menit)
+            $earClosed = 0.13; // default calib_ear_closed
+            $baseOpen  = max($earClosed + 0.06, $earClosed / 0.6);
+            $clamp01   = fn ($x) => max(0, min(1, $x));
+            $minByBin  = [];
+            foreach ($monitoringEvents->whereNotNull('ear_value') as $s) {
+                $openness = $clamp01(($s->ear_value - $earClosed) / ($baseOpen - $earClosed));
+                $yawn     = $s->mar_value !== null ? $clamp01(($s->mar_value - 0.7) / 0.6) : 0;
+                $a        = $clamp01($openness * (1 - 0.4 * $yawn));
+                $idx      = (int) floor((\Carbon\Carbon::parse($s->event_timestamp)->getTimestampMs() - $startMs) / 60000);
+                if (!isset($minByBin[$idx]) || $a < $minByBin[$idx]) $minByBin[$idx] = $a;
+            }
+            ksort($minByBin);
+            foreach ($minByBin as $idx => $a) {
+                $alertChart[] = ['x' => $startMs + $idx * 60000, 'y' => round($a, 3)];
+            }
+        }
+
         return view('trips.show', compact(
             'trip', 'gpsPoints', 'gpsPointsForMap', 'mapType', 'googleMapsKey',
             'etaHaversine', 'stops', 'monitoringEvents', 'monitoringForChart',
-            'gpsSegments', 'signalGaps', 'routeDeviations'
+            'gpsSegments', 'signalGaps', 'routeDeviations',
+            'intensityChart', 'alertChart', 'spanMin'
         ));
     }
 

@@ -220,3 +220,103 @@ new Chart(document.getElementById('chart-mar'), {
         }
     }
 });
+
+// ════════════════════════════════════════════════════════════════
+// NEW CHARTS: Intensitas Alarm & Kewaspadaan Driver
+// ════════════════════════════════════════════════════════════════
+const intensity = window.__tripshow?.intensityChart ?? [];
+const alertData = window.__tripshow?.alertChart ?? [];
+
+const fmtHM = ms => { 
+    const d = new Date(ms);
+    const pad = n => String(n).padStart(2,'0'); 
+    return pad(d.getHours()) + ':' + pad(d.getMinutes()); 
+};
+
+if (document.getElementById('intensityChart') && intensity.length > 0) {
+    new Chart(document.getElementById('intensityChart'), {
+        type: 'line',
+        data: { 
+            datasets: [{
+                data: intensity, 
+                parsing: false, 
+                borderColor: '#18181B', 
+                borderWidth: 2, 
+                tension: 0.3,
+                pointRadius: c => c.raw.y > 0 ? 4 : 0,
+                pointBackgroundColor: '#DC2626', 
+                pointBorderColor: '#fff',
+                pointBorderWidth: 1.5
+            }]
+        },
+        options: {
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { 
+                legend: { display: false },
+                tooltip: { 
+                    callbacks: { 
+                        title: i => fmtHM(i[0].parsed.x), 
+                        label: i => i.parsed.y + 'x alarm' 
+                    } 
+                } 
+            },
+            scales: {
+                x: { 
+                    type: 'linear', 
+                    ticks: { callback: v => fmtHM(v), color: '#B9B7B1' }, 
+                    grid: { display: false } 
+                },
+                y: { 
+                    beginAtZero: true, 
+                    ticks: { precision: 0, color: '#B9B7B1', stepSize: 1 } 
+                },
+            },
+        },
+    });
+}
+
+if (document.getElementById('alertChart') && alertData.length > 0) {
+    new Chart(document.getElementById('alertChart'), {
+        type: 'line',
+        data: { 
+            datasets: [{ 
+                data: alertData, 
+                parsing: false, 
+                borderColor: '#18181B', 
+                borderWidth: 2, 
+                tension: 0.3, 
+                pointRadius: 0 
+            }]
+        },
+        options: {
+            responsive: true, 
+            maintainAspectRatio: false, 
+            plugins: { 
+                legend: { display: false },
+                tooltip: { 
+                    callbacks: { 
+                        title: i => fmtHM(i[0].parsed.x), 
+                        label: i => Math.round(i.parsed.y * 100) + '% kewaspadaan' 
+                    } 
+                } 
+            },
+            scales: {
+                x: { 
+                    type: 'linear', 
+                    ticks: { callback: v => fmtHM(v), color: '#B9B7B1' }, 
+                    grid: { display: false } 
+                },
+                y: { 
+                    min: 0, 
+                    max: 1, 
+                    ticks: { 
+                        stepSize: 0.5, 
+                        color: '#71717A',
+                        callback: v => v >= 1 ? 'Awas' : (v <= 0 ? 'Ngantuk' : '') 
+                    } 
+                },
+            },
+        },
+    });
+}

@@ -640,51 +640,65 @@
         </div>
         @endif
 
-        {{-- Chart Toggle Buttons --}}
-        <div class="flex flex-wrap gap-2 mb-4">
-            <button type="button" class="chart-toggle-btn" onclick="toggleChart('perclos')" id="toggle-perclos">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                </svg>
-                PERCLOS
-            </button>
-            <button type="button" class="chart-toggle-btn" onclick="toggleChart('condition')" id="toggle-condition">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                </svg>
-                Kondisi Supir
-            </button>
-            <button type="button" class="chart-toggle-btn" onclick="toggleChart('ear')" id="toggle-ear">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                </svg>
-                EAR
-            </button>
-            <button type="button" class="chart-toggle-btn" onclick="toggleChart('mar')" id="toggle-mar">
-                <svg class="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-                    <path stroke-linecap="round" stroke-linejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0zM2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-                </svg>
-                MAR
-            </button>
+        <hr class="my-6 border-gray-100">
+
+        <div class="flex items-center justify-between mb-4">
+            <div class="text-sm font-bold text-gray-800">Grafik Detail (Opsional)</div>
+            <div class="text-xs text-gray-400">Klik tombol di bawah untuk menampilkan/menyembunyikan</div>
         </div>
 
-        {{-- Canvas grafik --}}
+        {{-- Old Chart Toggle Buttons --}}
+        <div class="flex flex-wrap gap-2 mb-4">
+            <button type="button" class="chart-toggle-btn collapsed hidden-chart" onclick="toggleChart('perclos')" id="toggle-perclos">PERCLOS</button>
+            <button type="button" class="chart-toggle-btn collapsed hidden-chart" onclick="toggleChart('condition')" id="toggle-condition">Kondisi Supir</button>
+            <button type="button" class="chart-toggle-btn collapsed hidden-chart" onclick="toggleChart('ear')" id="toggle-ear">EAR</button>
+            <button type="button" class="chart-toggle-btn collapsed hidden-chart" onclick="toggleChart('mar')" id="toggle-mar">MAR</button>
+        </div>
+
+        {{-- Old Canvas grafik --}}
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div id="chart-wrap-perclos" class="chart-container">
+            <div id="chart-wrap-perclos" class="chart-container collapsed">
                 <div class="text-xs font-bold text-gray-500 mb-2">PERCLOS & Tipe Event</div>
                 <canvas id="chart-perclos" height="160"></canvas>
             </div>
-            <div id="chart-wrap-condition" class="chart-container">
+            <div id="chart-wrap-condition" class="chart-container collapsed">
                 <div class="text-xs font-bold text-gray-500 mb-2">Kondisi Supir (Status over time)</div>
                 <canvas id="chart-condition" height="160"></canvas>
             </div>
-            <div id="chart-wrap-ear" class="chart-container">
+            <div id="chart-wrap-ear" class="chart-container collapsed">
                 <div class="text-xs font-bold text-gray-500 mb-2">EAR — Eye Aspect Ratio</div>
                 <canvas id="chart-ear" height="160"></canvas>
             </div>
-            <div id="chart-wrap-mar" class="chart-container">
+            <div id="chart-wrap-mar" class="chart-container collapsed">
                 <div class="text-xs font-bold text-gray-500 mb-2">MAR — Mouth Aspect Ratio</div>
                 <canvas id="chart-mar" height="160"></canvas>
+            </div>
+        </div>
+
+        {{-- NEW CHARTS: Intensitas Alarm & Tingkat Kewaspadaan Driver --}}
+        <div class="space-y-6">
+            <div class="border border-gray-100 rounded-xl p-4 bg-white shadow-sm">
+                <div class="mb-2">
+                    <h4 class="text-sm font-bold text-gray-800">Intensitas alarm</h4>
+                    <p class="text-xs text-gray-400">Jumlah alarm per interval sepanjang sesi</p>
+                </div>
+                <div style="overflow-x:auto;">
+                    <div style="width: {{ max(640, $spanMin * 60) }}px; height: 200px">
+                        <canvas id="intensityChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="border border-gray-100 rounded-xl p-4 bg-white shadow-sm">
+                <div class="mb-2">
+                    <h4 class="text-sm font-bold text-gray-800">Tingkat kewaspadaan driver</h4>
+                    <p class="text-xs text-gray-400">Indeks kewaspadaan (0 = Ngantuk, 1 = Awas)</p>
+                </div>
+                <div style="overflow-x:auto;">
+                    <div style="width: {{ max(640, $spanMin * 60) }}px; height: 200px">
+                        <canvas id="alertChart"></canvas>
+                    </div>
+                </div>
             </div>
         </div>
 
@@ -753,6 +767,8 @@ window.__tripshow = {
     signalGaps:       @json($signalGaps ?? []),
     monitoringEvents: @json($monitoringForChart),
     routeDeviations:  @json($routeDeviations ?? []),
+    intensityChart:   @json($intensityChart ?? []),
+    alertChart:       @json($alertChart ?? []),
 };
 
 // ── Toggle grafik ────────────────────────────────────────────────
