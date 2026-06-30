@@ -504,22 +504,4 @@ class IoTApiController extends Controller
 
         return response()->json(['ok' => true]);
     }
-}           $severityLevel = 'warning';
-            $alertTitle    = 'Peringatan: ' . $reasonString . ' — ' . optional($device->vehicle)->name;
-        }
-
-        $this->createOrUpdateAlert([
-            'alert_type'   => 'drowsy_driver',
-            'severity'     => $severityLevel,
-            'vehicle_id'   => $device->vehicle_id,
-            'driver_id'    => $device->driver_id,
-            'device_id'    => $device->id,
-            'trip_id'      => $activeTrip ? $activeTrip->id : null,
-            'title'        => $alertTitle,
-            'message'      => 'Sistem mendeteksi: ' . $reasonString,
-            'triggered_at' => now(),
-        ]);
-
-        return response()->json(['ok' => true]);
-    }
 }
