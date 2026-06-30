@@ -542,7 +542,7 @@
                 </a>
             </div>
             <div class="panel-body" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem 1.25rem;">
-                <div style="width:56px;height:56px;background:#f3f4f6;border-radius:16px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;font-size:26px;"></div>
+                <div style="width:56px;height:56px;background:#f3f4f6;border-radius:16px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;font-size:26px;">🚛</div>
                 <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:6px;">Belum Ada Trip</div>
                 <div style="font-size:12px;color:#9ca3af;line-height:1.5;margin-bottom:16px;">Kendaraan ini belum memiliki riwayat perjalanan.</div>
                 <a href="{{ route('trips.create') }}"
