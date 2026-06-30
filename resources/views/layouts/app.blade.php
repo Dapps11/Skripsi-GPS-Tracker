@@ -203,7 +203,7 @@
             Devices
         </a>
 
-        @if(app()->isLocal() || app()->environment('testing'))
+        <!-- @if(app()->isLocal() || app()->environment('testing'))
         <div class="text-[9px] font-bold text-gray-400 uppercase tracking-widest px-3 mb-2 mt-4">Tools</div>
         <a href="/gps-tester"
            class="sidebar-link {{ request()->is('gps-tester') ? 'active' : '' }}">
@@ -213,7 +213,7 @@
             </svg>
             GPS Tester
         </a>
-        @endif
+        @endif -->
     </nav>
 
     {{-- Fleet Stats --}}
@@ -299,7 +299,7 @@
                                {{ session('map_type','gmaps') === 'osm'
                                    ? 'bg-white text-green-700 shadow-sm'
                                    : 'text-gray-500 hover:text-gray-700' }}">
-                    🌍 <span class="hidden md:inline">OpenStreetMap</span>
+                     <span class="hidden md:inline">OpenStreetMap</span>
                 </button>
                 <button id="global-opt-gmaps"
                         onclick="globalSwitchMap('gmaps')"

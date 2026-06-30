@@ -35,7 +35,9 @@
                     <tr class="hover:bg-gray-50/70 transition-colors">
                         <td class="px-4 py-3">
                             <div class="flex items-center gap-2.5">
-                                <div class="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center text-base flex-shrink-0">🚛</div>
+                                <div class="w-8 h-8 bg-green-50 rounded-lg flex items-center justify-center text-base flex-shrink-0">
+                                    🚛
+                                </div>
                                 <div>
                                     <div class="text-sm font-semibold text-gray-900">{{ $vehicle->name }}</div>
                                     <div class="text-xs text-gray-400 font-mono">{{ $vehicle->vehicle_code }}</div>

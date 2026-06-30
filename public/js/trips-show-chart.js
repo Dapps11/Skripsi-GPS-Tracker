@@ -19,9 +19,6 @@ const marData      = monitoringEvents.map(e => e.mar_value     !== null ? +e.mar
 const bgColors     = monitoringEvents.map(e => eventColor(e.event_type, 0.85));
 const borderColors = monitoringEvents.map(e => eventColor(e.event_type, 1));
 
-// Kondisi supir: 0=Normal, 1=Mengantuk, 2=Alarm
-const conditionMap = { alarm: 2, drowsy: 1, drowsy_warning: 1 };
-const conditionData = monitoringEvents.map(e => conditionMap[e.event_type] ?? 0);
 
 const xScale = {
     ticks: { font: { size: 9 }, maxTicksLimit: 12, maxRotation: 0 },
@@ -93,49 +90,6 @@ new Chart(document.getElementById('chart-perclos'), {
     }
 });
 
-// ── Chart 2: Kondisi Supir (status timeline) ──────────────────
-new Chart(document.getElementById('chart-condition'), {
-    type: 'bar',
-    data: {
-        labels,
-        datasets: [{
-            label: 'Kondisi Supir',
-            data: conditionData,
-            backgroundColor: bgColors,
-            borderColor: borderColors,
-            borderWidth: 1.5,
-            borderRadius: 3,
-        }]
-    },
-    options: {
-        responsive: true,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-            legend,
-            tooltip: {
-                callbacks: {
-                    ...commonTooltip.callbacks,
-                    label: (ctx) => {
-                        const labels = ['Normal', 'Mengantuk', 'Alarm/Bahaya'];
-                        return ` Status: ${labels[ctx.parsed.y] ?? '—'}`;
-                    }
-                }
-            }
-        },
-        scales: {
-            x: xScale,
-            y: {
-                min: 0, max: 2,
-                ticks: {
-                    font: { size: 10 },
-                    stepSize: 1,
-                    callback: (val) => ['Normal', 'Mengantuk', 'Alarm'][val] ?? val,
-                },
-                grid: { color: '#f1f5f9' }
-            }
-        }
-    }
-});
 
 // ── Chart 3: EAR (Eye Aspect Ratio) ──────────────────────────
 new Chart(document.getElementById('chart-ear'), {

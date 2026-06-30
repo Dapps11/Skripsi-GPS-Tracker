@@ -9,7 +9,7 @@ const chartAlarms = window.__dashboard?.chartAlarms ?? [];
 const gridColor = '#f1f5f9';
 const tickFont  = { size: 10 };
 
-// ── Chart 1: Trip & Jarak per hari ───────────────────────────────
+// ── Chart 1: Trip per hari ───────────────────────────────
 new Chart(document.getElementById('chart-trip-daily'), {
     data: {
         labels: chartDays,
@@ -20,21 +20,6 @@ new Chart(document.getElementById('chart-trip-daily'), {
                 data: chartTrips,
                 backgroundColor: 'rgba(34,197,94,.75)',
                 borderRadius: 5,
-                yAxisID: 'y',
-                order: 2,
-            },
-            {
-                type: 'line',
-                label: 'Jarak (km)',
-                data: chartKm,
-                borderColor: '#2563eb',
-                backgroundColor: 'rgba(37,99,235,.08)',
-                borderWidth: 2,
-                pointRadius: 3,
-                pointBackgroundColor: '#2563eb',
-                tension: 0.35,
-                fill: true,
-                yAxisID: 'y2',
                 order: 1,
             }
         ]
@@ -48,9 +33,7 @@ new Chart(document.getElementById('chart-trip-daily'), {
         scales: {
             x:  { grid: { color: gridColor }, ticks: { font: tickFont } },
             y:  { grid: { color: gridColor }, ticks: { font: tickFont, stepSize: 1 },
-                  title: { display: true, text: 'Trip', font: { size: 10 }, color: '#9ca3af' }, beginAtZero: true },
-            y2: { position: 'right', grid: { drawOnChartArea: false }, ticks: { font: tickFont },
-                  title: { display: true, text: 'km', font: { size: 10 }, color: '#9ca3af' }, beginAtZero: true }
+                  title: { display: true, text: 'Trip', font: { size: 10 }, color: '#9ca3af' }, beginAtZero: true }
         }
     }
 });

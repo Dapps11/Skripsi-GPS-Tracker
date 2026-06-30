@@ -79,7 +79,7 @@
                             Kendaraan <span class="text-red-400">*</span>
                         </label>
                         <div class="relative">
-                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base pointer-events-none">🚛</span>
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base pointer-events-none"></span>
                             <select name="vehicle_id" id="vehicle-select" required
                                     class="w-full pl-9 pr-8 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 bg-white appearance-none"
                                     onchange="onVehicleChange(this.value)">
@@ -99,7 +99,7 @@
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1.5">Supir</label>
                         <div class="relative">
-                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base pointer-events-none">👤</span>
+                            <span class="absolute left-3 top-1/2 -translate-y-1/2 text-base pointer-events-none"></span>
                             <select name="driver_id" id="driver-select"
                                     class="w-full pl-9 pr-8 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 bg-white appearance-none">
                                 <option value="">Pilih supir...</option>
@@ -150,7 +150,7 @@
             {{-- ── SECTION 2: Origin ── --}}
             <div class="mb-6">
                 <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 pb-2 border-b border-gray-100">
-                    🟢 Titik Awal (Origin)
+                     Titik Awal (Origin)
                 </div>
 
                 {{-- Nama tempat — input manual --}}
@@ -191,7 +191,7 @@
                 {{-- Peta klik --}}
                 <div class="mb-3">
                     <div id="origin-map"></div>
-                    <p class="text-xs text-gray-400 mt-1">💡 Bisa juga klik langsung di peta untuk pin lokasi</p>
+                    <p class="text-xs text-gray-400 mt-1"> Bisa juga klik langsung di peta untuk pin lokasi</p>
                 </div>
 
                 {{-- Koordinat & Alamat — otomatis --}}
@@ -210,7 +210,7 @@
             {{-- ── SECTION 3: Destination ── --}}
             <div class="mb-6">
                 <div class="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3 pb-2 border-b border-gray-100">
-                    🔴 Titik Tujuan (Destination)
+                     Titik Tujuan (Destination)
                 </div>
 
                 <div class="mb-3">
@@ -247,7 +247,7 @@
 
                 <div class="mb-3">
                     <div id="dest-map"></div>
-                    <p class="text-xs text-gray-400 mt-1">💡 Bisa juga klik langsung di peta untuk pin lokasi</p>
+                    <p class="text-xs text-gray-400 mt-1"> Bisa juga klik langsung di peta untuk pin lokasi</p>
                 </div>
 
                 <div class="p-3 bg-gray-50 border border-gray-200 rounded-xl" id="dest-coord-box">

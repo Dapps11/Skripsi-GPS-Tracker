@@ -69,65 +69,21 @@
                 </div>
             </div>
 
-            {{-- Period Filter --}}
+            {{-- Single Date Filter --}}
             <div class="flex flex-wrap gap-2 items-center">
-                <button type="submit" name="filter" value="day"
-                        class="filter-btn {{ $filter === 'day' ? 'active' : '' }}">
-                    📅 Hari Ini
+                <input type="date" name="date"
+                       value="{{ $date }}"
+                       max="{{ now()->toDateString() }}"
+                       class="filter-input" style="width:140px;">
+                <button type="submit" class="filter-btn active">
+                    Terapkan
                 </button>
-                <button type="submit" name="filter" value="week"
-                        class="filter-btn {{ $filter === 'week' ? 'active' : '' }}">
-                    📅 Minggu Ini
-                </button>
-                <button type="submit" name="filter" value="month"
-                        class="filter-btn {{ $filter === 'month' ? 'active' : '' }}">
-                    📆 Bulan Ini
-                </button>
-
-                <div style="display:flex;align-items:center;gap:6px;margin-left:4px;">
-                    <span style="font-size:11px;font-weight:700;color:#9ca3af;">RANGE:</span>
-                    <input type="date" name="start_date"
-                           value="{{ $startDate ?? $date }}"
-                           class="filter-input" style="width:140px;">
-                    <span style="font-size:11px;color:#9ca3af;">s/d</span>
-                    <input type="date" name="end_date"
-                           value="{{ $endDate ?? $date }}"
-                           max="{{ now()->toDateString() }}"
-                           class="filter-input" style="width:140px;">
-                    <button type="submit" name="filter" value="custom"
-                            class="filter-btn {{ $filter === 'custom' ? 'active' : '' }}">
-                        🔍 Terapkan
-                    </button>
-                </div>
-
-                @if($filter !== 'day')
-                <a href="{{ route('master.vehicles.history', $vehicle) }}"
-                   style="font-size:11px;color:#9ca3af;text-decoration:none;margin-left:4px;"
-                   onmouseover="this.style.color='#dc2626'" onmouseout="this.style.color='#9ca3af'">✕ Reset</a>
-                @endif
-            </div>
-
-            {{-- Hidden date for day filter --}}
-            @if($filter === 'day')
-            <div class="flex items-center gap-3">
-                <label class="text-xs font-bold text-gray-500">Tanggal:</label>
-                <input type="date" name="date" value="{{ $date }}" max="{{ now()->toDateString() }}"
-                       class="text-sm border border-gray-200 rounded-lg px-3 py-2 focus:outline-none focus:border-green-400">
-                <button type="submit" name="filter" value="day"
-                        class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-bold rounded-lg transition">
-                    Tampilkan
-                </button>
-            </div>
-            @endif
-
-            <div style="font-size:11px;color:#9ca3af;font-weight:600;">
-                📊 Menampilkan data: <span style="color:#111827;">{{ $filterLabel }}</span>
             </div>
         </form>
     </div>
 
     {{-- Stats --}}
-    <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+    <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <div class="stat-card">
             <div class="stat-val">{{ number_format($totalDistKm, 1) }} <span class="text-sm font-semibold text-gray-400">km</span></div>
             <div class="stat-lbl">Total Jarak</div>
@@ -145,12 +101,25 @@
             <div class="stat-lbl">Kecepatan Maks</div>
         </div>
         <div class="stat-card">
-            <div class="stat-val" style="color:#dc2626;">{{ count($stops) }}</div>
-            <div class="stat-lbl">Jumlah Stop</div>
+            <div class="stat-lbl">Jumlah Trip</div>
+            <div class="stat-val">{{ $trips->count() }} <span class="text-sm text-gray-500 font-normal">trip</span></div>
         </div>
         <div class="stat-card">
-            <div class="stat-val">{{ $count }}</div>
-            <div class="stat-lbl">Data GPS</div>
+            <div class="stat-lbl">Jumlah Stop</div>
+            <div class="stat-val">{{ count($stops) }} <span class="text-sm text-gray-500 font-normal">titik</span></div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-lbl">Waktu Berhenti</div>
+            <div class="stat-val">
+                @if($totalStopSec >= 3600)
+                    {{ floor($totalStopSec / 3600) }}<span class="text-sm text-gray-500 font-normal">j</span>
+                    {{ floor(($totalStopSec % 3600) / 60) }}<span class="text-sm text-gray-500 font-normal">m</span>
+                @elseif($totalStopSec >= 60)
+                    {{ floor($totalStopSec / 60) }}<span class="text-sm text-gray-500 font-normal">m</span>
+                @else
+                    {{ $totalStopSec }}<span class="text-sm text-gray-500 font-normal">d</span>
+                @endif
+            </div>
         </div>
     </div>
 
@@ -240,9 +209,9 @@
                 @foreach($dayAlerts as $alert)
                 <li class="px-4 py-3 flex items-start gap-2.5">
                     <div class="mt-0.5 flex-shrink-0">
-                        @if($alert->severity === 'critical') 🚨
-                        @elseif($alert->severity === 'warning') ⚠️
-                        @else ℹ️
+                        @if($alert->severity === 'critical') 
+                        @elseif($alert->severity === 'warning') 
+                        @else 
                         @endif
                     </div>
                     <div class="flex-1 min-w-0">
@@ -321,7 +290,7 @@ window.__historymap = {
         const dur  = mins > 0 ? `${mins}m ${secs}d` : `${secs}d`;
         const t1   = new Date(gap.start_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
         const t2   = new Date(gap.end_at).toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
-        return `<b style="color:#7c3aed">📡 Sinyal Hilang</b><br><small>${t1} — ${t2} (${dur})</small>`;
+        return `<b style="color:#7c3aed"> Sinyal Hilang</b><br><small>${t1} — ${t2} (${dur})</small>`;
     }
 
     // ══════════════════════════════════════════════════════════════
@@ -379,7 +348,7 @@ window.__historymap = {
             });
             L.marker([stop.lat, stop.lng], { icon: stopIcon, zIndexOffset: 600 })
              .addTo(map)
-             .bindPopup(`<div style="font-weight:700;color:#dc2626;">⏱️ Stop ${stop.duration_label}</div>
+             .bindPopup(`<div style="font-weight:700;color:#dc2626;"> Stop ${stop.duration_label}</div>
                          <div style="font-size:10px;color:#6b7280;margin-top:4px;">${stop.started_at} — ${stop.ended_at}</div>`);
         });
 
@@ -506,7 +475,7 @@ window.__historymap = {
             });
             mk.addListener('click', () => {
                 stopInfoWin.setContent(
-                    `<div style="font-weight:700;color:#dc2626;font-size:12px;">⏱️ Stop ${stop.duration_label}</div>
+                    `<div style="font-weight:700;color:#dc2626;font-size:12px;"> Stop ${stop.duration_label}</div>
                      <div style="font-size:11px;color:#6b7280;margin-top:4px;">${stop.started_at} — ${stop.ended_at}</div>`
                 );
                 stopInfoWin.open(gMap, mk);

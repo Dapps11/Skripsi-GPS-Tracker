@@ -490,7 +490,13 @@ async function pollAPIeta() {
         const data = await fetch(`/api/internal/trip/${activeTrip.vehicle_id}`)
                            .then(r => r.json());
 
-        if (!data?.trip?.current_lat) return;
+        if (!data?.trip?.current_lat) {
+            // Fallback ke GPS point terakhir yang sudah ada di halaman
+            if (!gpsPoints.length) return;
+            const last = gpsPoints[gpsPoints.length - 1];
+            if (!last?.latitude) return;
+            data = { trip: { current_lat: last.latitude, current_lng: last.longitude, current_speed_kmh: last.speed_kmh || 0 } };
+        }
 
         const lat     = +data.trip.current_lat;
         const lng     = +data.trip.current_lng;
@@ -635,6 +641,36 @@ if (MAP_TYPE === 'gmaps') {
 }
 
 if (activeTrip) {
+    // ── Isi panel langsung dari gpsPoints yang sudah ada di halaman ──
+    // Supaya live-dist & ETA tidak kosong saat halaman baru dimuat.
+    (function initPanelFromGpsPoints() {
+        if (!activeTrip || !gpsPoints.length) return;
+        const last = gpsPoints[gpsPoints.length - 1];
+        if (!last || !last.latitude || !last.longitude) return;
+
+        const lat     = +last.latitude;
+        const lng     = +last.longitude;
+        const destLat = +activeTrip.dest_lat;
+        const destLng = +activeTrip.dest_lng;
+        if (!destLat || !destLng) return;
+
+        // Sisa jarak
+        const distKm = haversineJS(lat, lng, destLat, destLng);
+        const distM  = Math.round(distKm * 1000);
+        const distEl = document.getElementById('live-dist');
+        if (distEl) {
+            distEl.textContent = distM >= 1000 ? distKm.toFixed(1) : distM;
+            const unitEl = distEl.nextElementSibling;
+            if (unitEl) unitEl.textContent = distM >= 1000 ? ' km' : ' m';
+        }
+
+        // ETA haversine real-time
+        const speed   = parseFloat(last.speed_kmh) || 0;
+        const etaMin  = calcRealtimeETA(lat, lng, destLat, destLng, speed);
+        const etaEl   = document.getElementById('eta-rt-haversine');
+        if (etaEl) etaEl.textContent = etaMin;
+    })();
+
     // ETA awal — sekali
     fetchInitialAPIeta();
 

@@ -240,7 +240,7 @@ const elLog    = document.getElementById('log-container');
 
 // ── Auto-detect URL ───────────────────────────────────────────────
 document.getElementById('server-url').value = window.location.origin;
-addLog(`🌐 Server URL: ${window.location.origin}`, 'info');
+addLog(` Server URL: ${window.location.origin}`, 'info');
 
 // ── Mini Map (Leaflet) ────────────────────────────────────────────
 gpsMap = L.map('gps-map', { zoomControl: false, attributionControl: false })
@@ -294,11 +294,11 @@ function updateStats() {
 // ── GPS Watch ─────────────────────────────────────────────────────
 function startGPSWatch() {
     if (!('geolocation' in navigator)) {
-        addLog('❌ Geolocation tidak didukung!', 'err');
+        addLog(' Geolocation tidak didukung!', 'err');
         return false;
     }
     setGPSStatus('Meminta izin GPS...', '#f59e0b', false);
-    addLog('📡 Meminta akses GPS...', 'info');
+    addLog(' Meminta akses GPS...', 'info');
 
     watchId = navigator.geolocation.watchPosition(
         (pos) => {
@@ -317,7 +317,7 @@ function startGPSWatch() {
         },
         (err) => {
             const msgs = { 1:'Izin GPS ditolak', 2:'GPS tidak tersedia', 3:'Timeout GPS' };
-            addLog(`⚠️ GPS Error: ${msgs[err.code] || err.message}`, 'warn');
+            addLog(` GPS Error: ${msgs[err.code] || err.message}`, 'warn');
             setGPSStatus(msgs[err.code] || 'GPS Error', '#ef4444', false);
         },
         { enableHighAccuracy: true, timeout: 20000, maximumAge: 2000 }
@@ -360,7 +360,7 @@ async function sendPosition() {
         const ct = res.headers.get('content-type') || '';
         if (ct.includes('text/html')) {
             statErr++;
-            addLog('❌ Response HTML — ngrok splash? Coba refresh.', 'err');
+            addLog(' Response HTML — ngrok splash? Coba refresh.', 'err');
             updateStats(); return;
         }
 
@@ -368,14 +368,14 @@ async function sendPosition() {
         if (res.ok && json.ok) {
             statOk++;
             if (elSent) elSent.textContent = new Date().toLocaleTimeString('id-ID');
-            addLog(`✅ ${payload.latitude.toFixed(6)}, ${payload.longitude.toFixed(6)} | ${payload.speed_kmh} km/h | ${json.status ?? ''}`, 'ok');
+            addLog(` ${payload.latitude.toFixed(6)}, ${payload.longitude.toFixed(6)} | ${payload.speed_kmh} km/h | ${json.status ?? ''}`, 'ok');
         } else {
             statErr++;
-            addLog(`❌ Server ${res.status}: ${JSON.stringify(json)}`, 'err');
+            addLog(` Server ${res.status}: ${JSON.stringify(json)}`, 'err');
         }
     } catch(e) {
         statErr++;
-        addLog(`❌ ${e.message}`, 'err');
+        addLog(` ${e.message}`, 'err');
     }
     updateStats();
 }
@@ -385,8 +385,8 @@ function startTracking() {
     if (isTracking) return;
     const url      = document.getElementById('server-url').value.trim();
     const deviceId = document.getElementById('device-id').value.trim();
-    if (!url)      { addLog('❌ Server URL kosong!', 'err'); return; }
-    if (!deviceId) { addLog('❌ Pilih Device ID!',   'err'); return; }
+    if (!url)      { addLog(' Server URL kosong!', 'err'); return; }
+    if (!deviceId) { addLog(' Pilih Device ID!',   'err'); return; }
 
     const ok = startGPSWatch();
     if (!ok) return;
@@ -415,7 +415,7 @@ function stopTracking() {
 
 function sendOnce() {
     const url = document.getElementById('server-url').value.trim();
-    if (!url) { addLog('❌ Isi Server URL dulu!', 'err'); return; }
+    if (!url) { addLog(' Isi Server URL dulu!', 'err'); return; }
     if (!currentPos) {
         setGPSStatus('Mendapatkan GPS...', '#f59e0b', false);
         navigator.geolocation.getCurrentPosition(
@@ -430,7 +430,7 @@ function sendOnce() {
                 updateMap(c.latitude, c.longitude);
                 sendPosition();
             },
-            (err) => addLog(`❌ GPS gagal: ${err.message}`, 'err'),
+            (err) => addLog(` GPS gagal: ${err.message}`, 'err'),
             { enableHighAccuracy: true, timeout: 15000 }
         );
     } else {

@@ -189,7 +189,7 @@
 
                 {{-- ORIGIN --}}
                 <div>
-                    <div class="text-xs font-bold text-green-700 uppercase tracking-wider mb-2">🟢 Titik Asal</div>
+                    <div class="text-xs font-bold text-green-700 uppercase tracking-wider mb-2"> Titik Asal</div>
 
                     {{-- Search --}}
                     <div class="relative mb-2">
@@ -206,7 +206,7 @@
 
                     {{-- Peta --}}
                     <div id="edit-origin-map" class="mb-2"></div>
-                    <p class="text-xs text-gray-400 mb-1">💡 Klik peta atau drag marker untuk pindah pin</p>
+                    <p class="text-xs text-gray-400 mb-1"> Klik peta atau drag marker untuk pindah pin</p>
 
                     {{-- Alamat display --}}
                     <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-xl">
@@ -224,7 +224,7 @@
 
                 {{-- DESTINATION --}}
                 <div>
-                    <div class="text-xs font-bold text-red-600 uppercase tracking-wider mb-2">🔴 Titik Tujuan</div>
+                    <div class="text-xs font-bold text-red-600 uppercase tracking-wider mb-2"> Titik Tujuan</div>
 
                     {{-- Search --}}
                     <div class="relative mb-2">
@@ -241,7 +241,7 @@
 
                     {{-- Peta --}}
                     <div id="edit-dest-map" class="mb-2"></div>
-                    <p class="text-xs text-gray-400 mb-1">💡 Klik peta atau drag marker untuk pindah pin</p>
+                    <p class="text-xs text-gray-400 mb-1"> Klik peta atau drag marker untuk pindah pin</p>
 
                     {{-- Alamat display --}}
                     <div class="p-2.5 bg-gray-50 border border-gray-200 rounded-xl">
@@ -273,7 +273,7 @@
                 </a>
                 <button type="submit"
                         class="px-6 py-2.5 bg-green-500 hover:bg-green-600 text-white text-sm font-bold rounded-xl transition-all shadow-md hover:shadow-green-200">
-                    💾 Simpan Perubahan
+                     Simpan Perubahan
                 </button>
             </div>
         </form>

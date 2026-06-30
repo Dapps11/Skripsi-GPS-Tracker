@@ -125,6 +125,7 @@ class DashboardController extends Controller
             ->selectRaw('driver_id, COUNT(*) as trip_count, SUM(total_distance_km) as total_km')
             ->groupBy('driver_id')
             ->orderByDesc('trip_count')
+            ->orderByDesc('total_km')
             ->limit(5)
             ->with('driver:id,full_name,driver_code,status')
             ->get();

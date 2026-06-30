@@ -36,9 +36,13 @@ class VehicleMasterController extends Controller
             'year'            => 'nullable|integer|min:2000|max:2030',
             'color'           => 'nullable|string|max:30',
             'capacity_liters' => 'nullable|numeric|min:0',
-            'status'          => 'required|in:moving,idle,offline',
+            'status'          => 'in:moving,idle,offline',
             'notes'           => 'nullable|string',
         ]);
+
+        // Kendaraan baru selalu dimulai dengan status offline
+        // Status akan diupdate otomatis oleh IoT device
+        $validated['status'] = 'offline';
 
         // vehicle_code digenerate otomatis di server, retry kalau kebetulan bentrok
         for ($attempt = 0; $attempt < 5; $attempt++) {
@@ -194,12 +198,13 @@ class VehicleMasterController extends Controller
         ])->values()->toArray();
 
         $stops = $this->detectStops($allPoints);
+        $totalStopSec = array_sum(array_column($stops, 'duration_seconds'));
 
         $mapType       = session('map_type', 'gmaps');
         $googleMapsKey = config('services.google_maps.key', '');
 
         return view('masters.vehicles.history', compact(
-            'vehicle', 'date', 'segments', 'signalGaps', 'stops',
+            'vehicle', 'date', 'segments', 'signalGaps', 'stops', 'totalStopSec',
             'totalDistKm', 'movingSec', 'maxSpeedKmh', 'count',
             'trips', 'dayAlerts', 'vehicles', 'tripsForMap',
             'mapType', 'googleMapsKey', 'filter', 'filterLabel'

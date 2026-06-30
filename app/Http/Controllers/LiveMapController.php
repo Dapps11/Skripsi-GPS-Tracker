@@ -9,7 +9,16 @@ class LiveMapController extends Controller
 {
     public function index()
     {
-        $vehicles = DB::table('v_vehicle_last_position')->get();
+        $vehicles = DB::table('vehicles as v')
+            ->leftJoin('iot_devices as i', 'v.id', '=', 'i.vehicle_id')
+            ->leftJoin('drivers as d', 'i.driver_id', '=', 'd.id')
+            ->whereNull('v.deleted_at')
+            ->select(
+                'v.id as vehicle_id', 'v.name as vehicle_name', 'v.license_plate', 'v.status as vehicle_status', 'v.vehicle_code',
+                'i.last_latitude as latitude', 'i.last_longitude as longitude',
+                'i.last_speed_kmh as speed_kmh', 'i.last_heartbeat as updated_at',
+                'd.full_name as driver_name'
+            )->get();
 
         return view('livemap.index', array_merge(
             compact('vehicles'),
@@ -19,9 +28,15 @@ class LiveMapController extends Controller
 
     public function show(Vehicle $vehicle)
     {
-        $trip = DB::table('v_active_trip_detail')
-                  ->where('vehicle_id', $vehicle->id)
-                  ->first();
+        $trip = DB::table('trips as t')
+            ->join('vehicles as v', 't.vehicle_id', '=', 'v.id')
+            ->leftJoin('drivers as d', 't.driver_id', '=', 'd.id')
+            ->where('t.status', 'in_progress')
+            ->where('t.vehicle_id', $vehicle->id)
+            ->select(
+                't.*', 'v.name as vehicle_name', 'v.license_plate', 'v.vehicle_type',
+                'd.full_name as driver_name', 'd.phone as driver_phone'
+            )->first();
 
         // Jika tidak ada trip aktif, cari trip terakhir yang selesai
         $lastTrip = null;
@@ -34,8 +49,10 @@ class LiveMapController extends Controller
                 ->orderByDesc('trips.arrived_at')
                 ->select(
                     'trips.*',
+                    'vehicles.id as vehicle_id',
                     'vehicles.name as vehicle_name',
                     'vehicles.license_plate',
+                    'vehicles.status as vehicle_status',
                     'vehicles.vehicle_type',
                     'drivers.full_name as driver_name',
                     'drivers.phone as driver_phone'
@@ -69,7 +86,16 @@ class LiveMapController extends Controller
                                 ->orderByDesc('recorded_at')
                                 ->first();
 
-        $vehicles = DB::table('v_vehicle_last_position')->get();
+        $vehicles = DB::table('vehicles as v')
+            ->leftJoin('iot_devices as i', 'v.id', '=', 'i.vehicle_id')
+            ->leftJoin('drivers as d', 'i.driver_id', '=', 'd.id')
+            ->whereNull('v.deleted_at')
+            ->select(
+                'v.id as vehicle_id', 'v.name as vehicle_name', 'v.license_plate', 'v.status as vehicle_status', 'v.vehicle_code',
+                'i.last_latitude as latitude', 'i.last_longitude as longitude',
+                'i.last_speed_kmh as speed_kmh', 'i.last_heartbeat as updated_at',
+                'd.full_name as driver_name'
+            )->get();
 
         return view('livemap.index', array_merge(
             compact('vehicle', 'trip', 'lastTrip', 'gpsPoints', 'latestDriverStatus', 'vehicles'),

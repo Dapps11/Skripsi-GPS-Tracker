@@ -9,6 +9,7 @@ use App\Models\IotDevice;
 use App\Models\Vehicle;
 use App\Models\Alert;
 use App\Models\Trip;
+use App\Models\Driver;
 use App\Events\VehiclePositionUpdated;
 use App\Events\FleetStatusUpdated;
 use App\Events\TripStatusUpdated;
@@ -198,6 +199,9 @@ class IoTApiController extends Controller
                     'estimated_arrival_at' => now()->addMinutes($durationM),
                     'device_id'            => $device->id,
                 ]);
+                if ($plannedTrip->driver_id) {
+                    Driver::where('id', $plannedTrip->driver_id)->update(['status' => 'on_duty']);
+                }
                 $activeTrip = $plannedTrip;
             }
         }
@@ -230,13 +234,17 @@ class IoTApiController extends Controller
             ]);
             Vehicle::where('id', $device->vehicle_id)->update(['status' => 'idle']);
             $device->update(['status' => 'idle']);
+            if ($activeTrip->driver_id) {
+                Driver::where('id', $activeTrip->driver_id)->update(['status' => 'available']);
+            }
 
-            Alert::create([
+            $this->createOrUpdateAlert([
                 'alert_type'   => 'trip_completed',
                 'severity'     => 'info',
                 'vehicle_id'   => $device->vehicle_id,
                 'driver_id'    => $device->driver_id,
                 'device_id'    => $device->id,
+                'trip_id'      => $activeTrip->id,
                 'title'        => 'Trip Selesai — ' . optional($device->vehicle)->name,
                 'message'      => "Kendaraan tiba di {$activeTrip->dest_name}.",
                 'triggered_at' => now(),
@@ -279,12 +287,13 @@ class IoTApiController extends Controller
             ->exists();
         if ($exists) return;
 
-        Alert::create([
+        $this->createOrUpdateAlert([
             'alert_type'   => 'long_stop',
             'severity'     => 'warning',
             'vehicle_id'   => $device->vehicle_id,
             'driver_id'    => $device->driver_id,
             'device_id'    => $device->id,
+            'trip_id'      => $activeTrip->id,
             'title'        => 'Kendaraan Berhenti Terlalu Lama — ' . optional($device->vehicle)->name,
             'message'      => "Kendaraan berhenti {$stopMinutes} menit dalam perjalanan (Trip {$activeTrip->trip_code}).",
             'triggered_at' => now(),
@@ -310,12 +319,13 @@ class IoTApiController extends Controller
             ->exists();
         if ($exists) return;
 
-        Alert::create([
+        $this->createOrUpdateAlert([
             'alert_type'   => 'route_deviation',
             'severity'     => 'warning',
             'vehicle_id'   => $device->vehicle_id,
             'driver_id'    => $device->driver_id,
             'device_id'    => $device->id,
+            'trip_id'      => $activeTrip->id,
             'title'        => 'Kendaraan Keluar Jalur — ' . optional($device->vehicle)->name,
             'message'      => "Kendaraan menyimpang " . round($deviationKm, 1) . " km dari jalur menuju {$activeTrip->dest_name}.",
             'triggered_at' => now(),
@@ -331,12 +341,13 @@ class IoTApiController extends Controller
             ->exists();
         if ($exists) return;
 
-        Alert::create([
+        $this->createOrUpdateAlert([
             'alert_type'   => 'unauthorized_movement',
             'severity'     => 'warning',
             'vehicle_id'   => $device->vehicle_id,
             'driver_id'    => $device->driver_id,
             'device_id'    => $device->id,
+            'trip_id'      => null,
             'title'        => 'Kendaraan Bergerak Tanpa Trip — ' . optional($device->vehicle)->name,
             'message'      => "Kendaraan terdeteksi bergerak tanpa perjalanan aktif di koordinat ({$lat}, {$lng}).",
             'triggered_at' => now(),
@@ -378,6 +389,44 @@ class IoTApiController extends Controller
             );
         }
         return round($total, 2);
+    }
+
+    private function createOrUpdateAlert(array $data)
+    {
+        $query = Alert::where('alert_type', $data['alert_type'])
+                      ->where('vehicle_id', $data['vehicle_id']);
+                      
+        if (!empty($data['trip_id'])) {
+            $query->where('trip_id', $data['trip_id']);
+        } else {
+            $query->whereDate('triggered_at', now()->toDateString());
+        }
+
+        $existing = $query->first();
+
+        if ($existing) {
+            $meta = $existing->meta_data ?? [];
+            $count = ($meta['count'] ?? 1) + 1;
+            $meta['count'] = $count;
+
+            $baseMessage = preg_replace('/ \(x\d+\)$/', '', $data['message']);
+            $newMessage = $baseMessage . " (x{$count})";
+
+            $existing->update([
+                'message'      => $newMessage,
+                'meta_data'    => $meta,
+                'is_read'      => false,
+                'severity'     => $data['severity'] === 'critical' ? 'critical' : $existing->severity,
+                'triggered_at' => now(),
+            ]);
+            
+            // Note: $existing->update() does not fire 'created' event on the model, 
+            // so we'll fire AlertCreated manually to ensure the frontend updates.
+            event(new \App\Events\AlertCreated($existing));
+            return $existing;
+        }
+
+        return Alert::create($data);
     }
 
     private function haversine(float $lat1, float $lng1, float $lat2, float $lng2): float
@@ -441,13 +490,32 @@ class IoTApiController extends Controller
         $severityLevel = $data['event_type'] === 'alarm' ? 'critical' : 'warning';
         $alertTitle    = $data['event_type'] === 'alarm' ? 'BAHAYA: Sopir Tertidur!' : 'Peringatan: Sopir Mulai Kelelahan';
 
-        Alert::create([
+        $this->createOrUpdateAlert([
             'alert_type'   => 'drowsy_driver',
             'severity'     => $severityLevel,
             'vehicle_id'   => $device->vehicle_id,
             'driver_id'    => $device->driver_id,
             'device_id'    => $device->id,
+            'trip_id'      => $activeTrip ? $activeTrip->id : null,
             'title'        => $alertTitle . ' — ' . optional($device->vehicle)->name,
+            'message'      => 'Sistem mendeteksi: ' . $reasonString,
+            'triggered_at' => now(),
+        ]);
+
+        return response()->json(['ok' => true]);
+    }
+}           $severityLevel = 'warning';
+            $alertTitle    = 'Peringatan: ' . $reasonString . ' — ' . optional($device->vehicle)->name;
+        }
+
+        $this->createOrUpdateAlert([
+            'alert_type'   => 'drowsy_driver',
+            'severity'     => $severityLevel,
+            'vehicle_id'   => $device->vehicle_id,
+            'driver_id'    => $device->driver_id,
+            'device_id'    => $device->id,
+            'trip_id'      => $activeTrip ? $activeTrip->id : null,
+            'title'        => $alertTitle,
             'message'      => 'Sistem mendeteksi: ' . $reasonString,
             'triggered_at' => now(),
         ]);

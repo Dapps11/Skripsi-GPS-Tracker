@@ -23,10 +23,11 @@
                 <label class="block text-sm font-semibold text-gray-700 mb-1.5">
                     Device ID
                 </label>
-                <div class="relative">
+                <div style="position:relative;">
                     <input type="text" value="{{ $nextDeviceId }}" readonly tabindex="-1"
-                           class="w-full pl-4 pr-10 py-2.5 text-sm font-semibold border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed select-none">
-                    <svg class="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                           class="w-full py-2.5 text-sm font-semibold border border-gray-200 rounded-xl bg-gray-50 text-gray-600 cursor-not-allowed select-none"
+                           style="padding-left:1rem;padding-right:2.5rem;">
+                    <svg style="position:absolute;right:12px;top:50%;transform:translateY(-50%);width:16px;height:16px;color:#9ca3af;flex-shrink:0;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-12v3H8V7a4 4 0 118 0z"/>
                     </svg>
                 </div>
@@ -90,10 +91,10 @@
                           class="w-full px-4 py-2.5 text-sm border border-gray-200 rounded-xl focus:outline-none focus:border-green-500 focus:ring-2 focus:ring-green-500/20 resize-none">{{ old('notes') }}</textarea>
             </div>
 
-            {{-- Info: device_type otomatis tracker --}}
+            <!-- {{-- Info: device_type otomatis tracker --}}
             <div class="mb-6 p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-700">
-                ℹ️ Device type otomatis ditetapkan sebagai <strong>Tracker</strong> (GPS + IoT combined).
-            </div>
+                 Device type otomatis ditetapkan sebagai <strong>Tracker</strong> (GPS + IoT combined).
+            </div> -->
 
             <div class="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
                 <a href="{{ route('devices.index') }}"

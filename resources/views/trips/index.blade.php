@@ -60,7 +60,7 @@
                         <td class="px-4 py-3">
                             <div class="font-bold text-gray-900 text-xs font-mono">{{ $trip->trip_code }}</div>
                             @if($trip->driver)
-                            <div class="text-xs text-gray-400 mt-0.5">👤 {{ $trip->driver->full_name }}</div>
+                            <div class="text-xs text-gray-400 mt-0.5"> {{ $trip->driver->full_name }}</div>
                             @endif
                         </td>
                         <td class="px-4 py-3">

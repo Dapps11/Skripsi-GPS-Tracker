@@ -12,6 +12,10 @@ class Alert extends Model
         'meta_data', 'is_read', 'read_at', 'triggered_at',
     ];
 
+    protected $dispatchesEvents = [
+        'created' => \App\Events\AlertCreated::class,
+    ];
+
     protected function casts(): array
     {
         return [

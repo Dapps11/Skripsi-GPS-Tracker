@@ -129,12 +129,12 @@
                             <div>
                                 <div style="font-size:9px;font-weight:700;color:#22c55e;text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;">Start Point</div>
                                 <div style="font-size:13px;font-weight:700;color:#111827;line-height:1.3;">{{ $trip->origin_name }}</div>
-                                <div style="font-size:11px;color:#9ca3af;margin-top:1px;">Departed: {{ \Carbon\Carbon::parse($trip->departed_at)->format('h:i A') }}</div>
+                                <div style="font-size:11px;color:#9ca3af;margin-top:1px;">Departed: {{ \Carbon\Carbon::parse($trip->departed_at)->setTimezone('Asia/Jakarta')->format('H:i') }} WIB</div>
                             </div>
                             <div>
                                 <div style="font-size:9px;font-weight:700;color:#ef4444;text-transform:uppercase;letter-spacing:.08em;margin-bottom:2px;">Destination</div>
                                 <div style="font-size:13px;font-weight:700;color:#111827;line-height:1.3;">{{ $trip->dest_name }}</div>
-                                <div style="font-size:11px;color:#9ca3af;margin-top:1px;">Est. Arrival: {{ \Carbon\Carbon::parse($trip->estimated_arrival_at)->format('h:i A') }}</div>
+                                <div style="font-size:11px;color:#9ca3af;margin-top:1px;">Est. Arrival: {{ \Carbon\Carbon::parse($trip->estimated_arrival_at)->setTimezone('Asia/Jakarta')->format('H:i') }} WIB</div>
                             </div>
                         </div>
                     </div>
@@ -403,7 +403,7 @@
                     <div>
                         <div style="font-size:11px;font-weight:700;font-family:monospace;color:#6b7280;">{{ $lastTrip->trip_code }}</div>
                         @if($lastTrip->driver_name ?? null)
-                        <div style="font-size:11px;color:#9ca3af;margin-top:2px;">👤 {{ $lastTrip->driver_name }}</div>
+                        <div style="font-size:11px;color:#9ca3af;margin-top:2px;"> {{ $lastTrip->driver_name }}</div>
                         @endif
                     </div>
                     @php $ltLbl = $lastTrip->status === 'completed' ? 'Completed' : 'Cancelled'; @endphp
@@ -542,7 +542,7 @@
                 </a>
             </div>
             <div class="panel-body" style="display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;padding:2rem 1.25rem;">
-                <div style="width:56px;height:56px;background:#f3f4f6;border-radius:16px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;font-size:26px;">🚛</div>
+                <div style="width:56px;height:56px;background:#f3f4f6;border-radius:16px;display:flex;align-items:center;justify-content:center;margin-bottom:12px;font-size:26px;"></div>
                 <div style="font-size:13px;font-weight:700;color:#374151;margin-bottom:6px;">Belum Ada Trip</div>
                 <div style="font-size:12px;color:#9ca3af;line-height:1.5;margin-bottom:16px;">Kendaraan ini belum memiliki riwayat perjalanan.</div>
                 <a href="{{ route('trips.create') }}"
@@ -587,8 +587,10 @@
                    style="display:flex;align-items:center;gap:12px;padding:10px;border-radius:12px;border:1.5px solid transparent;text-decoration:none;margin-bottom:4px;"
                    onmouseover="this.style.background='#f9fafb';this.style.borderColor='#e5e7eb'"
                    onmouseout="this.style.background='transparent';this.style.borderColor='transparent'">
-                    <div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0;
-                        background:{{ $v->vehicle_status==='moving'?'#dcfce7':($v->vehicle_status==='idle'?'#ffedd5':'#fee2e2') }};">🚛</div>
+                    <div style="width:36px;height:36px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;
+                        background:{{ $v->vehicle_status==='moving'?'#dcfce7':($v->vehicle_status==='idle'?'#ffedd5':'#fee2e2') }};">
+                        🚛
+                    </div>
                     <div style="flex:1;min-width:0;">
                         <div style="font-size:13px;font-weight:700;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">{{ $v->vehicle_name }}</div>
                         <div style="font-size:11px;color:#9ca3af;">{{ $v->license_plate }}</div>

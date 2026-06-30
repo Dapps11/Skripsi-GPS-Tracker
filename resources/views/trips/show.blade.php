@@ -95,9 +95,9 @@
                     {{ $trip->vehicle->name ?? '—' }}
                     <span class="text-sm font-normal text-gray-400 ml-1">{{ $trip->vehicle->license_plate ?? '' }}</span>
                 </div>
-                <div class="text-sm text-gray-500">👤 {{ $trip->driver->full_name ?? '—' }}</div>
+                <div class="text-sm text-gray-500"> {{ $trip->driver->full_name ?? '—' }}</div>
                 @if($trip->notes)
-                <div class="text-xs text-gray-400 mt-1 italic">📝 {{ $trip->notes }}</div>
+                <div class="text-xs text-gray-400 mt-1 italic"> {{ $trip->notes }}</div>
                 @endif
             </div>
             <div class="flex items-center gap-2 flex-wrap flex-shrink-0">
@@ -121,17 +121,19 @@
     {{-- Ringkasan Perjalanan --}}
     @if($trip->departed_at)
     <div class="card p-5 mb-4">
-        <h3 class="text-sm font-bold text-gray-900 mb-3">📋 Ringkasan Perjalanan</h3>
-        <div class="info-grid" style="grid-template-columns:repeat(auto-fit, minmax(160px, 1fr));">
-            {{-- Waktu Berangkat --}}
-            <div class="info-item">
-                <div class="info-item-label">Waktu Berangkat</div>
-                <div class="info-item-value">{{ \Carbon\Carbon::parse($trip->departed_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB</div>
+        <h3 class="text-sm font-bold text-gray-900 mb-3"> Ringkasan Perjalanan</h3>
+        <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3">
+            
+            <div class="stat-box">
+                <div class="stat-label">Waktu Berangkat</div>
+                <div style="font-size:13px;font-weight:700;color:#111827;margin-top:4px;">
+                    {{ \Carbon\Carbon::parse($trip->departed_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB
+                </div>
             </div>
-            {{-- Waktu Tiba --}}
-            <div class="info-item">
-                <div class="info-item-label">Waktu Tiba</div>
-                <div class="info-item-value">
+            
+            <div class="stat-box">
+                <div class="stat-label">Waktu Tiba</div>
+                <div style="font-size:13px;font-weight:700;color:#111827;margin-top:4px;">
                     @if($trip->arrived_at)
                         {{ \Carbon\Carbon::parse($trip->arrived_at)->setTimezone('Asia/Jakarta')->format('d/m/Y H:i') }} WIB
                     @else
@@ -139,106 +141,192 @@
                     @endif
                 </div>
             </div>
-            {{-- Durasi Aktual --}}
-            <div class="info-item">
-                <div class="info-item-label">Durasi Aktual</div>
-                <div class="info-item-value">
-                    @php
-                        $endTime = $trip->arrived_at ?? now();
-                        $durMinutes = (int) \Carbon\Carbon::parse($trip->departed_at)->diffInMinutes($endTime);
-                        $durH = intdiv($durMinutes, 60);
-                        $durM = $durMinutes % 60;
-                    @endphp
-                    {{ $durH > 0 ? "{$durH}j {$durM}m" : "{$durM} menit" }}
+
+            <div class="stat-box">
+                <div class="stat-label">Durasi</div>
+                <div class="stat-value">
+                    @if($trip->departed_at && $trip->arrived_at)
+                        @php
+                            $durMenit = (int) \Carbon\Carbon::parse($trip->departed_at)->diffInMinutes($trip->arrived_at);
+                            $durJam   = (int) floor($durMenit / 60);
+                            $durSisa  = $durMenit % 60;
+                        @endphp
+                        @if($durJam > 0)
+                            {{ $durJam }}<span class="stat-unit">j</span> {{ $durSisa }}<span class="stat-unit">mnt</span>
+                        @else
+                            {{ $durMenit }}<span class="stat-unit"> mnt</span>
+                        @endif
+                    @elseif($trip->departed_at && $trip->status === 'in_progress')
+                        @php $durMenit = (int) \Carbon\Carbon::parse($trip->departed_at)->diffInMinutes(now()); @endphp
+                        {{ $durMenit }}<span class="stat-unit"> mnt</span>
+                    @else
+                        <span style="font-size:14px;color:#9ca3af;">—</span>
+                    @endif
                 </div>
             </div>
-            {{-- Jarak --}}
-            <div class="info-item">
-                <div class="info-item-label">Jarak Tempuh</div>
-                <div class="info-item-value">{{ $trip->total_distance_km ? number_format($trip->total_distance_km, 1) . ' km' : 'Menghitung...' }}</div>
+
+            <div class="stat-box">
+                <div class="stat-label">Jarak Tempuh</div>
+                <div class="stat-value">
+                    @if($trip->total_distance_km)
+                        {{ number_format($trip->total_distance_km, 1) }}
+                        <span class="stat-unit">km</span>
+                    @else
+                        <span style="font-size:14px;color:#9ca3af;">Menghitung...</span>
+                    @endif
+                </div>
             </div>
-            {{-- Kecepatan --}}
+
             @if($gpsPoints->count() > 0)
             @php
                 $speeds = $gpsPoints->pluck('speed_kmh')->filter(fn($s) => $s > 0);
                 $maxSpd = $speeds->count() ? (int) round($speeds->max()) : 0;
                 $avgSpd = $speeds->count() ? (int) round($speeds->avg()) : 0;
             @endphp
-            <div class="info-item">
-                <div class="info-item-label">Kecepatan Rata-rata</div>
-                <div class="info-item-value">{{ $avgSpd }} km/h</div>
+            <div class="stat-box">
+                <div class="stat-label">Kec. Rata-rata</div>
+                <div class="stat-value">{{ $avgSpd }}<span class="stat-unit"> km/h</span></div>
             </div>
-            <div class="info-item">
-                <div class="info-item-label">Kecepatan Maks</div>
-                <div class="info-item-value">{{ $maxSpd }} km/h</div>
-            </div>
-            @endif
-            {{-- Total Stop Time --}}
-            @if(count($stops) > 0)
-            @php
-                $totalStopSec = collect($stops)->sum('duration_seconds');
-                $stopMin = intdiv($totalStopSec, 60);
-                $stopSec = $totalStopSec % 60;
-            @endphp
-            <div class="info-item">
-                <div class="info-item-label">Total Berhenti</div>
-                <div class="info-item-value" style="color:#dc2626;">{{ count($stops) }}× · {{ $stopMin > 0 ? "{$stopMin}m {$stopSec}d" : "{$stopSec}d" }}</div>
+            <div class="stat-box">
+                <div class="stat-label">Kec. Maks</div>
+                <div class="stat-value">{{ $maxSpd }}<span class="stat-unit"> km/h</span></div>
             </div>
             @endif
-            {{-- Signal Gaps --}}
-            @if(!empty($signalGaps))
-            @php
-                $totalGapSec = collect($signalGaps)->sum('duration_sec');
-                $gapMin = intdiv($totalGapSec, 60);
-                $gapSec = $totalGapSec % 60;
-            @endphp
-            <div class="info-item" style="background:#faf5ff;border:1px solid #ede9fe;">
-                <div class="info-item-label" style="color:#7c3aed;">Sinyal Terputus</div>
-                <div class="info-item-value" style="color:#7c3aed;">{{ count($signalGaps) }}× · {{ $gapMin > 0 ? "{$gapMin}m {$gapSec}d" : "{$gapSec}d" }}</div>
+
+            @if($trip->origin_lat && $trip->dest_lat)
+            <div class="stat-box col-span-2">
+                <div class="stat-label">ETA Awal</div>
+                <div class="flex gap-4">
+                    <div>
+                        <div class="stat-value" style="margin-bottom:2px;">
+                            {{ $etaHaversine ?? '—' }}
+                            <span class="stat-unit">mnt</span>
+                        </div>
+                        <div style="font-size:10px;color:#16a34a;">
+                            Haversine • {{ $distHaversine ?? '—' }} km
+                        </div>
+                    </div>
+                    <div>
+                        <div class="stat-value" style="margin-bottom:2px;">
+                            <span id="eta-api-value">—</span>
+                            <span class="stat-unit">mnt</span>
+                        </div>
+                        <div style="font-size:10px;color:#2563eb;">
+                            <span id="eta-api-label">{{ $mapType === 'gmaps' ? 'Google Maps' : 'OSRM' }}</span> • <span id="eta-api-dist">—</span> km
+                        </div>
+                    </div>
+                </div>
             </div>
             @endif
-            {{-- Route Deviations --}}
-            @if(!empty($routeDeviations))
-            <div class="info-item" style="background:#fffbeb;border:1px solid #fde68a;">
-                <div class="info-item-label" style="color:#d97706;">🚧 Keluar Jalur</div>
-                <div class="info-item-value" style="color:#d97706;">{{ count($routeDeviations) }} kali</div>
-            </div>
-            @endif
-            {{-- Deteksi Kantuk --}}
-            @if($monitoringEvents->count() > 0)
-            @php
-                $alarmCnt = $monitoringEvents->where('is_alarm', 1)->count();
-                $drowsyCnt = $monitoringEvents->whereIn('event_type', ['drowsy', 'drowsy_warning'])->count();
-            @endphp
-            <div class="info-item" style="background:#fff7ed;border:1px solid #fed7aa;">
-                <div class="info-item-label" style="color:#c2410c;">⚠️ Deteksi Kantuk</div>
-                <div class="info-item-value" style="color:#dc2626;">{{ $alarmCnt }} alarm · {{ $drowsyCnt }} drowsy</div>
-            </div>
-            @endif
-            {{-- ETA vs Aktual --}}
+
             @if($etaHaversine && $trip->arrived_at)
             @php
                 $actualMin = (int) \Carbon\Carbon::parse($trip->departed_at)->diffInMinutes($trip->arrived_at);
                 $diff = $actualMin - $etaHaversine;
             @endphp
-            <div class="info-item">
-                <div class="info-item-label">ETA vs Aktual</div>
-                <div class="info-item-value">
+            <div class="stat-box">
+                <div class="stat-label">ETA vs Aktual</div>
+                <div style="font-size:13px;font-weight:700;margin-top:4px;">
                     @if($diff > 5)
-                        <span style="color:#dc2626;">Terlambat +{{ $diff }} menit</span>
+                        <span style="color:#dc2626;">Terlambat {{ $diff }} menit</span>
                     @elseif($diff < -5)
                         <span style="color:#16a34a;">Lebih cepat {{ abs($diff) }} menit</span>
                     @else
-                        <span style="color:#16a34a;">Tepat waktu ✓</span>
+                        <span style="color:#16a34a;">Tepat waktu </span>
                     @endif
                 </div>
             </div>
             @endif
-            {{-- Device --}}
-            <div class="info-item">
-                <div class="info-item-label">Device / GPS Points</div>
-                <div class="info-item-value">{{ $trip->device->device_id ?? '—' }} · {{ $gpsPoints->count() }} titik</div>
+
+            <div class="stat-box">
+                <div class="stat-label">Jumlah Stop</div>
+                <div class="stat-value">
+                    {{ count($stops) }}
+                    <span class="stat-unit">kali</span>
+                </div>
+                @if(count($stops) > 0)
+                @php
+                    $totalStopSec = collect($stops)->sum('duration_seconds');
+                    $tsMin = intdiv($totalStopSec, 60);
+                    $tsSec = $totalStopSec % 60;
+                    $totalStopLabel = $tsMin >= 60
+                        ? floor($tsMin / 60) . 'j ' . ($tsMin % 60) . 'm ' . $tsSec . 'd'
+                        : ($tsMin > 0 ? $tsMin . 'm ' . $tsSec . 'd' : $tsSec . 'd');
+                @endphp
+                <div style="font-size:10px;color:#9ca3af;margin-top:2px;">total {{ $totalStopLabel }} berhenti</div>
+                @else
+                <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Tidak pernah berhenti</div>
+                @endif
             </div>
+
+            <div class="stat-box">
+                <div class="stat-label"> Sinyal Terputus</div>
+                <div class="stat-value">
+                    {{ count($signalGaps) }}
+                    <span class="stat-unit">kali</span>
+                </div>
+                @if(!empty($signalGaps))
+                @php
+                    $totalGapSec = collect($signalGaps)->sum('duration_sec');
+                    $gMin = intdiv($totalGapSec, 60);
+                    $gSec = $totalGapSec % 60;
+                    $totalGapLabel = $gMin > 0 ? "{$gMin}m {$gSec}d" : "{$gSec}d";
+                @endphp
+                <div style="font-size:10px;color:#9ca3af;margin-top:2px;">total {{ $totalGapLabel }} tanpa sinyal</div>
+                @else
+                <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Koneksi stabil</div>
+                @endif
+            </div>
+
+            <div class="stat-box">
+                <div class="stat-label"> Melenceng dari Rute</div>
+                <div class="stat-value">
+                    {{ count($routeDeviations) }}
+                    <span class="stat-unit">kali</span>
+                </div>
+                @if(empty($routeDeviations))
+                <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Sesuai rute</div>
+                @endif
+            </div>
+
+            <div class="stat-box">
+                <div class="stat-label">Device</div>
+                <div style="font-size:11px;font-weight:700;color:#111827;margin-top:4px;word-break:break-all;">
+                    {{ $trip->device->device_id ?? '—' }}
+                </div>
+            </div>
+
+            <div class="stat-box">
+                <div class="stat-label">GPS Points</div>
+                <div class="stat-value">
+                    {{ $gpsPoints->count() }}
+                    <span class="stat-unit">titik</span>
+                </div>
+            </div>
+
+            @php
+                $alarmCount = $monitoringEvents->where('is_alarm', 1)->count();
+                $drowsyCount = $monitoringEvents->whereIn('event_type', ['drowsy', 'drowsy_warning'])->count();
+            @endphp
+            <div class="stat-box col-span-2">
+                <div class="stat-label"> Deteksi Kantuk</div>
+                <div class="flex items-end gap-3 mt-1">
+                    <div>
+                        <div class="stat-value">{{ $alarmCount }}</div>
+                        <div style="font-size:9px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Alarm</div>
+                    </div>
+                    <div style="width:1px;height:32px;background:#e5e7eb;flex-shrink:0;"></div>
+                    <div>
+                        <div class="stat-value">{{ $drowsyCount }}</div>
+                        <div style="font-size:9px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Drowsy</div>
+                    </div>
+                    @if($alarmCount == 0 && $drowsyCount == 0)
+                    <div style="width:1px;height:32px;background:#e5e7eb;flex-shrink:0;"></div>
+                    <div style="font-size:10px;color:#9ca3af;margin-bottom:3px;">Supir terpantau aman</div>
+                    @endif
+                </div>
+            </div>
+
         </div>
     </div>
     @endif
@@ -292,179 +380,7 @@
                 </div>
             </div>
 
-            {{-- Stats Grid --}}
-            <div class="grid grid-cols-2 gap-3">
-                <div class="stat-box">
-                    <div class="stat-label">Jarak Tempuh</div>
-                    <div class="stat-value">
-                        @if($trip->total_distance_km)
-                            {{ number_format($trip->total_distance_km, 1) }}
-                            <span class="stat-unit">km</span>
-                        @else
-                            <span style="font-size:14px;color:#9ca3af;">Menghitung...</span>
-                        @endif
-                    </div>
-                </div>
 
-                <div class="stat-box">
-                    <div class="stat-label">Durasi</div>
-                    <div class="stat-value">
-                        @if($trip->departed_at && $trip->arrived_at)
-                            @php
-                                $durMenit = (int) \Carbon\Carbon::parse($trip->departed_at)
-                                                                ->diffInMinutes($trip->arrived_at);
-                                $durJam   = (int) floor($durMenit / 60);
-                                $durSisa  = $durMenit % 60;
-                            @endphp
-                            @if($durJam > 0)
-                                {{ $durJam }}<span class="stat-unit">j</span> {{ $durSisa }}<span class="stat-unit">mnt</span>
-                            @else
-                                {{ $durMenit }}<span class="stat-unit"> mnt</span>
-                            @endif
-                        @elseif($trip->departed_at && $trip->status === 'in_progress')
-                            @php $durMenit = (int) \Carbon\Carbon::parse($trip->departed_at)->diffInMinutes(now()); @endphp
-                            {{ $durMenit }}<span class="stat-unit"> mnt</span>
-                        @else
-                            <span style="font-size:14px;color:#9ca3af;">—</span>
-                        @endif
-                    </div>
-                </div>
-
-                {{-- ETA Awal --}}
-                @if($trip->origin_lat && $trip->dest_lat)
-
-                <div class="stat-box col-span-2">
-                    <div class="stat-label">ETA Awal</div>
-
-                    {{-- Haversine --}}
-                    <div class="stat-value" style="margin-bottom:6px;">
-                        {{ $etaHaversine ?? '—' }}
-                        <span class="stat-unit">mnt</span>
-                    </div>
-                    <div style="font-size:10px;color:#16a34a;margin-bottom:8px;">
-                        Haversine (estimasi manual)
-                    </div>
-
-                    {{-- API --}}
-                    <div class="stat-value">
-                        <span id="eta-api-value">—</span>
-                        <span class="stat-unit">mnt</span>
-                    </div>
-                    <div style="font-size:10px;color:#2563eb;">
-                        <span id="eta-api-label">
-                            {{ $mapType === 'gmaps' ? 'Google Maps' : 'OSRM' }}
-                        </span> •
-                        <span id="eta-api-dist">—</span> km
-                    </div>
-                </div>
-
-                @endif
-
-                <div class="stat-box">
-                    <div class="stat-label">GPS Points</div>
-                    <div class="stat-value">
-                        {{ $gpsPoints->count() }}
-                        <span class="stat-unit">titik</span>
-                    </div>
-                </div>
-
-                <div class="stat-box">
-                    <div class="stat-label">Jumlah Stop</div>
-                    <div class="stat-value">
-                        {{ count($stops) }}
-                        <span class="stat-unit">kali</span>
-                    </div>
-                    @if(count($stops) > 0)
-                    @php
-                        $totalStopSec = collect($stops)->sum('duration_seconds');
-                        $tsMin = intdiv($totalStopSec, 60);
-                        $tsSec = $totalStopSec % 60;
-                        $totalStopLabel = $tsMin >= 60
-                            ? floor($tsMin / 60) . 'j ' . ($tsMin % 60) . 'm ' . $tsSec . 'd'
-                            : ($tsMin > 0 ? $tsMin . 'm ' . $tsSec . 'd' : $tsSec . 'd');
-                    @endphp
-                    <div style="font-size:10px;color:#9ca3af;margin-top:2px;">total {{ $totalStopLabel }} berhenti</div>
-                    @endif
-                </div>
-
-                @if(!empty($signalGaps))
-                <div class="stat-box" style="border:1px solid #ede9fe;background:#faf5ff;">
-                    <div class="stat-label" style="color:#7c3aed;">📡 Sinyal Terputus</div>
-                    <div class="stat-value" style="color:#7c3aed;">
-                        {{ count($signalGaps) }}
-                        <span class="stat-unit">kali</span>
-                    </div>
-                    @php
-                        $totalGapSec = collect($signalGaps)->sum('duration_sec');
-                        $gMin = intdiv($totalGapSec, 60);
-                        $gSec = $totalGapSec % 60;
-                        $totalGapLabel = $gMin > 0 ? "{$gMin}m {$gSec}d" : "{$gSec}d";
-                    @endphp
-                    <div style="font-size:10px;color:#9ca3af;margin-top:2px;">total {{ $totalGapLabel }} tanpa sinyal</div>
-                </div>
-                @endif
-
-                @if(!empty($routeDeviations))
-                <div class="stat-box" style="border:1px solid #fde68a;background:#fffbeb;">
-                    <div class="stat-label" style="color:#d97706;">🚧 Keluar Jalur</div>
-                    <div class="stat-value" style="color:#d97706;">
-                        {{ count($routeDeviations) }}
-                        <span class="stat-unit">kali</span>
-                    </div>
-                    @php
-                        $maxDevDist = collect($routeDeviations)->max('max_distance_m');
-                        $totalDevSec = collect($routeDeviations)->sum('duration_sec');
-                        $devMin = intdiv($totalDevSec, 60);
-                    @endphp
-                    <div style="font-size:10px;color:#9ca3af;margin-top:2px;">maks {{ $maxDevDist }}m, total {{ $devMin }}m</div>
-                </div>
-                @endif
-
-                <div class="stat-box">
-                    <div class="stat-label">Device</div>
-                    <div style="font-size:11px;font-weight:700;color:#111827;margin-top:4px;word-break:break-all;">
-                        {{ $trip->device->device_id ?? '—' }}
-                    </div>
-                </div>
-
-                @if($gpsPoints->count() > 0)
-                @php
-                    $speeds = $gpsPoints->pluck('speed_kmh')->filter(fn($s) => $s > 0);
-                    $maxSpd = $speeds->count() ? (int) round($speeds->max()) : 0;
-                    $avgSpd = $speeds->count() ? (int) round($speeds->avg()) : 0;
-                @endphp
-                <div class="stat-box">
-                    <div class="stat-label">Kec. Maks</div>
-                    <div class="stat-value">{{ $maxSpd }}<span class="stat-unit"> km/h</span></div>
-                </div>
-                <div class="stat-box">
-                    <div class="stat-label">Kec. Rata</div>
-                    <div class="stat-value">{{ $avgSpd }}<span class="stat-unit"> km/h</span></div>
-                </div>
-                @endif
-
-                {{-- Monitoring kantuk --}}
-                @if($monitoringEvents->count() > 0)
-                @php
-                    $alarmCount = $monitoringEvents->where('is_alarm', 1)->count();
-                    $drowsyCount = $monitoringEvents->whereIn('event_type', ['drowsy', 'drowsy_warning'])->count();
-                @endphp
-                <div class="stat-box col-span-2" style="background:#fff7ed;border:1px solid #fed7aa;">
-                    <div class="stat-label" style="color:#c2410c;">⚠️ Deteksi Kantuk</div>
-                    <div class="flex items-end gap-3 mt-1">
-                        <div>
-                            <div class="stat-value" style="color:#dc2626;">{{ $alarmCount }}</div>
-                            <div style="font-size:9px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Alarm</div>
-                        </div>
-                        <div style="width:1px;height:32px;background:#fed7aa;flex-shrink:0;"></div>
-                        <div>
-                            <div class="stat-value" style="color:#f97316;">{{ $drowsyCount }}</div>
-                            <div style="font-size:9px;color:#9ca3af;font-weight:600;text-transform:uppercase;">Drowsy</div>
-                        </div>
-                    </div>
-                </div>
-                @endif
-            </div>
 
             {{-- Legend --}}
             @if($gpsPoints->count() >= 2)
@@ -486,24 +402,18 @@
                     <div class="legend-dot" style="background:#ef4444;box-shadow:0 0 0 2px #ef444455;"></div>
                     <span>Titik Tujuan</span>
                 </div>
-                @if(count($stops) > 0)
                 <div class="legend-item">
                     <div class="legend-dot" style="background:#dc2626;box-shadow:0 0 0 2px #dc262655;"></div>
                     <span>Titik Berhenti ({{ count($stops) }})</span>
                 </div>
-                @endif
-                @if(!empty($signalGaps))
                 <div class="legend-item">
                     <div class="legend-dot" style="background:#7c3aed;box-shadow:0 0 0 2px #7c3aed55;"></div>
                     <span style="color:#7c3aed;font-weight:600;">Sinyal Terputus ({{ count($signalGaps) }})</span>
                 </div>
-                @endif
-                @if(!empty($routeDeviations))
-                <div class="legend-item">
+                <!-- <div class="legend-item">
                     <div class="legend-dot" style="background:#d97706;box-shadow:0 0 0 2px #d9770655;"></div>
-                    <span style="color:#d97706;font-weight:600;">Keluar Jalur ({{ count($routeDeviations) }})</span>
-                </div>
-                @endif
+                    <span style="color:#d97706;font-weight:600;">Melenceng dari Rute ({{ count($routeDeviations) }})</span>
+                </div> -->
             </div>
             @endif
         </div>
@@ -515,7 +425,7 @@
 
             @if($gpsPoints->count() === 0)
             <div class="mt-3 p-4 bg-yellow-50 border border-yellow-200 rounded-xl text-sm text-yellow-700 text-center">
-                ⚠️ Belum ada data GPS untuk trip ini.
+                 Belum ada data GPS untuk trip ini.
             </div>
             @endif
         </div>
@@ -524,10 +434,23 @@
     {{-- GPS Timeline --}}
     @if($gpsPoints->count() > 0)
     <div class="card p-5">
-        <h3 class="text-sm font-bold text-gray-900 mb-3">
-            📍 GPS Track Timeline
-            <span class="text-xs font-normal text-gray-400 ml-2">({{ $gpsPoints->count() }} titik total)</span>
-        </h3>
+        <div class="flex items-center justify-between mb-3">
+            <h3 class="text-sm font-bold text-gray-900">
+                 GPS Track Timeline
+                <span class="text-xs font-normal text-gray-400 ml-2">({{ $gpsPoints->count() }} titik total)</span>
+            </h3>
+            <button type="button" id="gps-timeline-toggle"
+                    onclick="toggleGpsTimeline()"
+                    style="display:flex;align-items:center;gap:6px;padding:5px 12px;border-radius:8px;border:1.5px solid #e5e7eb;background:white;color:#6b7280;font-size:11px;font-weight:700;cursor:pointer;transition:all .2s;"
+                    onmouseover="this.style.borderColor='#22c55e';this.style.color='#16a34a'"
+                    onmouseout="this.style.borderColor='#e5e7eb';this.style.color='#6b7280'">
+                <svg id="gps-timeline-icon" style="width:14px;height:14px;transition:transform .3s;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 9l-7 7-7-7"/>
+                </svg>
+                <span id="gps-timeline-label">Sembunyikan</span>
+            </button>
+        </div>
+        <div id="gps-timeline-body">
         <div class="overflow-x-auto">
             <table class="w-full text-xs">
                 <thead>
@@ -591,8 +514,27 @@
                 </tbody>
             </table>
         </div>
+        </div>
     </div>
     @endif
+
+    <script>
+    function toggleGpsTimeline() {
+        const body  = document.getElementById('gps-timeline-body');
+        const icon  = document.getElementById('gps-timeline-icon');
+        const label = document.getElementById('gps-timeline-label');
+        const isHidden = body.style.display === 'none';
+        if (isHidden) {
+            body.style.display = 'block';
+            icon.style.transform = 'rotate(0deg)';
+            label.textContent = 'Sembunyikan';
+        } else {
+            body.style.display = 'none';
+            icon.style.transform = 'rotate(-90deg)';
+            label.textContent = 'Tampilkan';
+        }
+    }
+    </script>
 
     {{-- Grafik Deteksi Kantuk --}}
     @if($monitoringEvents->count() > 0)
@@ -608,7 +550,7 @@
     <div class="card p-5 mt-4">
         <div class="flex items-center justify-between mb-4">
             <h3 class="text-sm font-bold text-gray-900">
-                😴 Grafik Deteksi Kantuk
+                 Grafik Deteksi Kantuk
                 <span class="text-xs font-normal text-gray-400 ml-2">({{ $monitoringEvents->count() }} event)</span>
             </h3>
             {{-- Legend --}}
@@ -642,38 +584,7 @@
 
         <hr class="my-6 border-gray-100">
 
-        <div class="flex items-center justify-between mb-4">
-            <div class="text-sm font-bold text-gray-800">Grafik Detail (Opsional)</div>
-            <div class="text-xs text-gray-400">Klik tombol di bawah untuk menampilkan/menyembunyikan</div>
-        </div>
 
-        {{-- Old Chart Toggle Buttons --}}
-        <div class="flex flex-wrap gap-2 mb-4">
-            <button type="button" class="chart-toggle-btn collapsed hidden-chart" onclick="toggleChart('perclos')" id="toggle-perclos">PERCLOS</button>
-            <button type="button" class="chart-toggle-btn collapsed hidden-chart" onclick="toggleChart('condition')" id="toggle-condition">Kondisi Supir</button>
-            <button type="button" class="chart-toggle-btn collapsed hidden-chart" onclick="toggleChart('ear')" id="toggle-ear">EAR</button>
-            <button type="button" class="chart-toggle-btn collapsed hidden-chart" onclick="toggleChart('mar')" id="toggle-mar">MAR</button>
-        </div>
-
-        {{-- Old Canvas grafik --}}
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
-            <div id="chart-wrap-perclos" class="chart-container collapsed">
-                <div class="text-xs font-bold text-gray-500 mb-2">PERCLOS & Tipe Event</div>
-                <canvas id="chart-perclos" height="160"></canvas>
-            </div>
-            <div id="chart-wrap-condition" class="chart-container collapsed">
-                <div class="text-xs font-bold text-gray-500 mb-2">Kondisi Supir (Status over time)</div>
-                <canvas id="chart-condition" height="160"></canvas>
-            </div>
-            <div id="chart-wrap-ear" class="chart-container collapsed">
-                <div class="text-xs font-bold text-gray-500 mb-2">EAR — Eye Aspect Ratio</div>
-                <canvas id="chart-ear" height="160"></canvas>
-            </div>
-            <div id="chart-wrap-mar" class="chart-container collapsed">
-                <div class="text-xs font-bold text-gray-500 mb-2">MAR — Mouth Aspect Ratio</div>
-                <canvas id="chart-mar" height="160"></canvas>
-            </div>
-        </div>
 
         {{-- NEW CHARTS: Intensitas Alarm & Tingkat Kewaspadaan Driver --}}
         <div class="space-y-6">
@@ -702,10 +613,40 @@
             </div>
         </div>
 
+        <div class="mt-6 border border-gray-100 rounded-xl p-4 bg-white shadow-sm">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h4 class="text-sm font-bold text-gray-800">Grafik Detail Tambahan (Opsional)</h4>
+                    <p class="text-xs text-gray-400">Klik tombol di bawah untuk menampilkan grafik PERCLOS, EAR, MAR</p>
+                </div>
+            </div>
+
+            <div class="flex flex-wrap gap-2 mb-4">
+                <button type="button" class="chart-toggle-btn collapsed hidden-chart" onclick="toggleChart('perclos')" id="toggle-perclos">PERCLOS</button>
+                <button type="button" class="chart-toggle-btn collapsed hidden-chart" onclick="toggleChart('ear')" id="toggle-ear">EAR</button>
+                <button type="button" class="chart-toggle-btn collapsed hidden-chart" onclick="toggleChart('mar')" id="toggle-mar">MAR</button>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                <div id="chart-wrap-perclos" class="chart-container collapsed">
+                    <div class="text-xs font-bold text-gray-500 mb-2">PERCLOS & Tipe Event</div>
+                    <canvas id="chart-perclos" height="160"></canvas>
+                </div>
+                <div id="chart-wrap-ear" class="chart-container collapsed">
+                    <div class="text-xs font-bold text-gray-500 mb-2">EAR — Eye Aspect Ratio</div>
+                    <canvas id="chart-ear" height="160"></canvas>
+                </div>
+                <div id="chart-wrap-mar" class="chart-container collapsed">
+                    <div class="text-xs font-bold text-gray-500 mb-2">MAR — Mouth Aspect Ratio</div>
+                    <canvas id="chart-mar" height="160"></canvas>
+                </div>
+            </div>
+        </div>
+
         {{-- Tabel event alarm --}}
         @if($alarmEvents->count() > 0)
         <div class="mt-4">
-            <div class="text-xs font-bold text-gray-500 mb-2">🚨 Daftar Event Alarm</div>
+            <div class="text-xs font-bold text-gray-500 mb-2"> Daftar Event Alarm</div>
             <div class="overflow-x-auto">
                 <table class="w-full text-xs">
                     <thead>

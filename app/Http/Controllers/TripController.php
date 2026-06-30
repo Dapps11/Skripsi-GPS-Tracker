@@ -148,6 +148,7 @@ class TripController extends Controller
 
         // Hitung ETA awal dengan haversine
         $etaHaversine = null;
+        $distHaversine = null;
         if ($trip->origin_lat && $trip->dest_lat) {
             $dist       = $this->haversine(
                 $trip->origin_lat, $trip->origin_lng,
@@ -158,6 +159,7 @@ class TripController extends Controller
             $speed      = $distRoad < 5 ? 25 : ($distRoad < 15 ? 35 : 50);
             $delay      = $distRoad < 5 ? 5  : ($distRoad < 15 ? 4  : 3);
             $etaHaversine = (int) round(($distRoad / $speed) * 60 + $delay);
+            $distHaversine = round($distRoad, 1);
         }
 
         // Ambil data monitoring kantuk untuk trip ini
@@ -284,9 +286,9 @@ class TripController extends Controller
                 $gpsPoints,
                 $trip->origin_lat, $trip->origin_lng,
                 $trip->dest_lat,   $trip->dest_lng,
-                500,   // maxDistanceMeters
-                3,     // minDurationMinutes
-                2      // minOccurrences
+                150,   // maxDistanceMeters (diperkecil karena tol dan arteri sering sejajar dekat)
+                2,     // minDurationMinutes (minimal 2 menit)
+                1      // minOccurrences (minimal 1 kali pelanggaran sudah dicatat)
             );
         }
 
@@ -313,27 +315,65 @@ class TripController extends Controller
                 $intensityChart[] = ['x' => $startMs + $i * 60000, 'y' => $alarmBins[$i]];
             }
 
-            // Grafik 2: Tingkat Kewaspadaan (Terendah per Menit)
-            $earClosed = 0.13; // default calib_ear_closed
+            // Grafik 2: Tingkat Kewaspadaan (Berbasis PERCLOS, EAR, MAR)
+            $earClosed = 0.13;
             $baseOpen  = max($earClosed + 0.06, $earClosed / 0.6);
             $clamp01   = fn ($x) => max(0, min(1, $x));
-            $minByBin  = [];
-            foreach ($monitoringEvents->whereNotNull('ear_value') as $s) {
-                $openness = $clamp01(($s->ear_value - $earClosed) / ($baseOpen - $earClosed));
-                $yawn     = $s->mar_value !== null ? $clamp01(($s->mar_value - 0.7) / 0.6) : 0;
-                $a        = $clamp01($openness * (1 - 0.4 * $yawn));
-                $idx      = (int) floor((\Carbon\Carbon::parse($s->event_timestamp)->getTimestampMs() - $startMs) / 60000);
-                if (!isset($minByBin[$idx]) || $a < $minByBin[$idx]) $minByBin[$idx] = $a;
+            
+            $sumByBin = [];
+            $cntByBin = [];
+            $hasAlarmByBin = [];
+            
+            foreach ($monitoringEvents as $s) {
+                $idx = (int) floor((\Carbon\Carbon::parse($s->event_timestamp)->getTimestampMs() - $startMs) / 60000);
+                
+                if (!isset($sumByBin[$idx])) {
+                    $sumByBin[$idx] = 0;
+                    $cntByBin[$idx] = 0;
+                    $hasAlarmByBin[$idx] = false;
+                }
+                
+                // Gunakan PERCLOS jika ada (indikator kantuk paling stabil), jika tidak fallback ke EAR
+                $openness = 1.0;
+                if ($s->perclos_value !== null) {
+                    // Toleransi PERCLOS normal (blinking dsb) hingga 15% (0.15).
+                    // Lebih dari itu, nilai kewaspadaan akan turun dan mencapai 0 saat PERCLOS >= 0.4
+                    $openness = $clamp01(1.0 - (($s->perclos_value - 0.15) / 0.25));
+                } elseif ($s->ear_value !== null) {
+                    // Beri margin 20% (* 1.2) agar fluktuasi kecil tidak langsung menurunkan angka dari 1.0
+                    $openness = $clamp01((($s->ear_value - $earClosed) / ($baseOpen - $earClosed)) * 1.2);
+                }
+                
+                // Kurangi kewaspadaan jika menguap (MAR)
+                $yawn = $s->mar_value !== null ? $clamp01(($s->mar_value - 0.7) / 0.6) : 0;
+                $a    = $clamp01($openness * (1 - 0.4 * $yawn));
+                
+                $sumByBin[$idx] += $a;
+                $cntByBin[$idx]++;
+                
+                if ($s->is_alarm) {
+                    $hasAlarmByBin[$idx] = true;
+                }
             }
-            ksort($minByBin);
-            foreach ($minByBin as $idx => $a) {
-                $alertChart[] = ['x' => $startMs + $idx * 60000, 'y' => round($a, 3)];
+            
+            for ($i = 0; $i < $spanMin; $i++) {
+                $finalA = 1.0;
+                if (!empty($cntByBin[$i])) {
+                    $finalA = $sumByBin[$i] / $cntByBin[$i];
+                }
+                
+                // Pastikan menyentuh 0 HANYA jika ada triger alarm
+                if (!empty($hasAlarmByBin[$i])) {
+                    $finalA = 0.0;
+                }
+                
+                $alertChart[] = ['x' => $startMs + $i * 60000, 'y' => round($finalA, 3)];
             }
         }
 
         return view('trips.show', compact(
             'trip', 'gpsPoints', 'gpsPointsForMap', 'mapType', 'googleMapsKey',
-            'etaHaversine', 'stops', 'monitoringEvents', 'monitoringForChart',
+            'etaHaversine', 'distHaversine', 'stops', 'monitoringEvents', 'monitoringForChart',
             'gpsSegments', 'signalGaps', 'routeDeviations',
             'intensityChart', 'alertChart', 'spanMin'
         ));
@@ -560,28 +600,83 @@ class TripController extends Controller
     }
 
     /**
-     * Hitung jarak titik ke garis (origin→dest) menggunakan cross-track distance.
-     * Return dalam meter.
+     * Mengambil rute aktual (polyline) dari OSRM dan menyimpannya ke cache.
      */
-    private function pointToLineDist(float $ptLat, float $ptLng, float $oLat, float $oLng, float $dLat, float $dLng): float
+    private function getOsrmPolyline(float $oLat, float $oLng, float $dLat, float $dLng): array
     {
-        $R = 6371000; // bumi dalam meter
-        $distOP = $this->haversine($oLat, $oLng, $ptLat, $ptLng) * 1000; // meter
-        $bearOP = deg2rad($this->initialBearing($oLat, $oLng, $ptLat, $ptLng));
-        $bearOD = deg2rad($this->initialBearing($oLat, $oLng, $dLat, $dLng));
-
-        // Cross-track distance
-        $xtd = abs(asin(sin($distOP / $R) * sin($bearOP - $bearOD)) * $R);
-        return $xtd;
+        $cacheKey = "route_{$oLat}_{$oLng}_{$dLat}_{$dLng}";
+        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 604800, function () use ($oLat, $oLng, $dLat, $dLng) {
+            try {
+                $url = "https://router.project-osrm.org/route/v1/driving/{$oLng},{$oLat};{$dLng},{$dLat}?overview=full&geometries=geojson";
+                $response = \Illuminate\Support\Facades\Http::timeout(10)->get($url);
+                if ($response->successful()) {
+                    $data = $response->json();
+                    if ($data['code'] === 'Ok' && !empty($data['routes'])) {
+                        $coordinates = $data['routes'][0]['geometry']['coordinates'] ?? [];
+                        // OSRM [lng, lat] -> kita butuh [lat, lng]
+                        return array_map(function($c) {
+                            return [$c[1], $c[0]];
+                        }, $coordinates);
+                    }
+                }
+            } catch (\Exception $e) {
+                // Ignore
+            }
+            // Fallback ke garis lurus
+            return [[$oLat, $oLng], [$dLat, $dLng]];
+        });
     }
 
-    private function initialBearing(float $lat1, float $lng1, float $lat2, float $lng2): float
+    /**
+     * Hitung jarak titik ke polyline (rute jalan).
+     * Memproyeksikan titik ke segmen jalan terdekat menggunakan flat-earth approximation.
+     * Return dalam meter.
+     */
+    private function pointToPolylineDist(float $ptLat, float $ptLng, array $polyline): float
     {
-        $lat1 = deg2rad($lat1); $lat2 = deg2rad($lat2);
-        $dLng = deg2rad($lng2 - $lng1);
-        $y = sin($dLng) * cos($lat2);
-        $x = cos($lat1) * sin($lat2) - sin($lat1) * cos($lat2) * cos($dLng);
-        return fmod(rad2deg(atan2($y, $x)) + 360, 360);
+        $minDist = PHP_FLOAT_MAX;
+        $count = count($polyline);
+        if ($count == 0) return 0;
+        if ($count == 1) {
+            return $this->haversine($ptLat, $ptLng, $polyline[0][0], $polyline[0][1]) * 1000;
+        }
+
+        $R = 6371000; // bumi dalam meter
+        $xP = deg2rad($ptLng) * $R * cos(deg2rad($ptLat));
+        $yP = deg2rad($ptLat) * $R;
+
+        for ($i = 0; $i < $count - 1; $i++) {
+            $aLat = $polyline[$i][0];
+            $aLng = $polyline[$i][1];
+            $bLat = $polyline[$i+1][0];
+            $bLng = $polyline[$i+1][1];
+
+            $xA = deg2rad($aLng) * $R * cos(deg2rad($aLat));
+            $yA = deg2rad($aLat) * $R;
+            
+            $xB = deg2rad($bLng) * $R * cos(deg2rad($bLat));
+            $yB = deg2rad($bLat) * $R;
+            
+            $dx = $xB - $xA;
+            $dy = $yB - $yA;
+            $len2 = $dx * $dx + $dy * $dy;
+            
+            if ($len2 == 0) {
+                $dist = sqrt(pow($xP - $xA, 2) + pow($yP - $yA, 2));
+            } else {
+                $t = (($xP - $xA) * $dx + ($yP - $yA) * $dy) / $len2;
+                $t = max(0, min(1, $t));
+                $projX = $xA + $t * $dx;
+                $projY = $yA + $t * $dy;
+                $dist = sqrt(pow($xP - $projX, 2) + pow($yP - $projY, 2));
+            }
+
+            if ($dist < $minDist) {
+                $minDist = $dist;
+            }
+        }
+        
+        return $minDist;
     }
 
     /**
@@ -607,13 +702,15 @@ class TripController extends Controller
             $pt->gps_timestamp->format('Y-m-d H:i:s'), 'UTC'
         );
 
+        $polyline = $this->getOsrmPolyline($oLat, $oLng, $dLat, $dLng);
+
         $raw = [];
         $i   = 0;
         while ($i < $total) {
             $pt = $pts[$i];
-            $dist = $this->pointToLineDist(
+            $dist = $this->pointToPolylineDist(
                 (float)$pt->latitude, (float)$pt->longitude,
-                $oLat, $oLng, $dLat, $dLng
+                $polyline
             );
 
             if ($dist > $maxDistanceMeters) {
@@ -623,9 +720,9 @@ class TripController extends Controller
                 $j = $i;
 
                 while ($j + 1 < $total) {
-                    $nextDist = $this->pointToLineDist(
+                    $nextDist = $this->pointToPolylineDist(
                         (float)$pts[$j + 1]->latitude, (float)$pts[$j + 1]->longitude,
-                        $oLat, $oLng, $dLat, $dLng
+                        $polyline
                     );
                     if ($nextDist > $maxDistanceMeters) {
                         $maxDist = max($maxDist, $nextDist);
@@ -738,6 +835,10 @@ class TripController extends Controller
             'arrived_at' => now(),
         ]);
 
+        if ($trip->driver_id) {
+            Driver::where('id', $trip->driver_id)->update(['status' => 'available']);
+        }
+
         return back()->with('success', "Trip {$trip->trip_code} ditandai selesai.");
     }
     
@@ -755,6 +856,10 @@ class TripController extends Controller
             'status'      => 'in_progress',
             'departed_at' => now(),
         ]);
+
+        if ($trip->driver_id) {
+            Driver::where('id', $trip->driver_id)->update(['status' => 'on_duty']);
+        }
 
         return back()->with('success', "Trip {$trip->trip_code} dimulai.");
     }

@@ -7,17 +7,39 @@ $kernel->bootstrap();
 $trip = \App\Models\Trip::where('trip_code', 'TRIP-D9BCA5')->first();
 $gpsPoints = \App\Models\GpsTelemetry::where('trip_id', $trip->id)
     ->orderBy('gps_timestamp')
-    ->get(['latitude', 'longitude', 'speed_kmh', 'gps_timestamp']);
+    ->get();
 
-$ctrl = app(\App\Http\Controllers\TripController::class);
-$reflection = new ReflectionClass(get_class($ctrl));
+$gapThresholdSec = 30;
+$signalGaps      = [];
+$rawCount        = count($gpsPoints);
 
-$methodSmooth = $reflection->getMethod('smoothTrack');
-$methodSmooth->setAccessible(true);
-$gpsPointsForMap = $methodSmooth->invokeArgs($ctrl, [$gpsPoints]);
+for ($i = 0; $i < $rawCount - 1; $i++) {
+    $rawTs1 = $gpsPoints[$i]->gps_timestamp;
+    $rawTs2 = $gpsPoints[$i + 1]->gps_timestamp;
+    $t1     = \Carbon\Carbon::parse(($rawTs1 instanceof \Carbon\Carbon ? $rawTs1->format('Y-m-d H:i:s') : $rawTs1), 'UTC');
+    $t2     = \Carbon\Carbon::parse(($rawTs2 instanceof \Carbon\Carbon ? $rawTs2->format('Y-m-d H:i:s') : $rawTs2), 'UTC');
+    $gapSec = abs($t1->diffInSeconds($t2));
 
-$methodStops = $reflection->getMethod('detectStops');
-$methodStops->setAccessible(true);
-$stops = $methodStops->invokeArgs($ctrl, [$gpsPoints]);
+    if ($gapSec > $gapThresholdSec) {
+        // Cek apakah ada data kantuk (driver_monitoring_events) di antara t1 dan t2
+        $drowsyEventsCount = \App\Models\DriverMonitoringEvent::where('trip_id', $trip->id)
+            ->where('event_timestamp', '>', $t1->format('Y-m-d H:i:s'))
+            ->where('event_timestamp', '<', $t2->format('Y-m-d H:i:s'))
+            ->count();
+            
+        $drowsyEvents = \App\Models\DriverMonitoringEvent::where('trip_id', $trip->id)
+            ->where('event_timestamp', '>', $t1->format('Y-m-d H:i:s'))
+            ->where('event_timestamp', '<', $t2->format('Y-m-d H:i:s'))
+            ->get(['event_timestamp', 'event_type', 'is_alarm']);
 
-echo json_encode(['stops' => $stops], JSON_PRETTY_PRINT);
+        $signalGaps[] = [
+            'start_at'           => $t1->setTimezone('Asia/Jakarta')->format('H:i:s'),
+            'end_at'             => $t2->setTimezone('Asia/Jakarta')->format('H:i:s'),
+            'duration_sec'       => $gapSec,
+            'drowsy_events_cnt'  => $drowsyEventsCount,
+            'events_sample'      => $drowsyEvents->take(3)->toArray()
+        ];
+    }
+}
+
+echo json_encode($signalGaps, JSON_PRETTY_PRINT);

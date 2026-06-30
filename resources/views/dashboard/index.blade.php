@@ -56,11 +56,11 @@
             <div class="filter-bar">
                 <button type="submit" name="filter" value="week"
                         class="filter-btn {{ $filter === 'week' ? 'active' : '' }}">
-                    📅 Minggu Ini
+                     Minggu Ini
                 </button>
                 <button type="submit" name="filter" value="month"
                         class="filter-btn {{ $filter === 'month' ? 'active' : '' }}">
-                    📆 Bulan Ini
+                     Bulan Ini
                 </button>
 
                 <div style="display:flex;align-items:center;gap:6px;margin-left:4px;">
@@ -77,18 +77,18 @@
                            onchange="document.getElementById('filter-custom-btn').click()">
                     <button type="submit" name="filter" value="custom" id="filter-custom-btn"
                             class="filter-btn {{ $filter === 'custom' ? 'active' : '' }}">
-                        🔍 Terapkan
+                         Terapkan
                     </button>
                 </div>
 
                 @if($filter !== 'week')
                 <a href="{{ route('dashboard') }}" style="font-size:11px;color:#9ca3af;text-decoration:none;margin-left:4px;"
-                   onmouseover="this.style.color='#dc2626'" onmouseout="this.style.color='#9ca3af'">✕ Reset</a>
+                   onmouseover="this.style.color='#dc2626'" onmouseout="this.style.color='#9ca3af'"> Reset</a>
                 @endif
             </div>
         </form>
         <div style="margin-top:8px;font-size:11px;color:#9ca3af;font-weight:600;">
-            📊 Menampilkan data: <span style="color:#111827;">{{ $filterLabel }}</span>
+             Menampilkan data: <span style="color:#111827;">{{ $filterLabel }}</span>
         </div>
     </div>
 
@@ -202,7 +202,7 @@
                 <svg class="w-4 h-4 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                     <path stroke-linecap="round" stroke-linejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
                 </svg>
-                Trip Selesai & Jarak — {{ $filterLabel }}
+                Trip Selesai — {{ $filterLabel }}
             </div>
             <canvas id="chart-trip-daily" height="180"></canvas>
         </div>
@@ -225,7 +225,7 @@
         {{-- Top Drivers --}}
         <div class="card p-4">
             <div class="section-label">
-                🏆 Supir Paling Aktif — {{ $filterLabel }}
+                 Supir Paling Aktif — {{ $filterLabel }}
             </div>
             @if($topDrivers->isEmpty())
             <p class="text-sm text-gray-400 text-center py-6">Belum ada data.</p>
@@ -253,7 +253,7 @@
         {{-- Top Vehicles --}}
         <div class="card p-4">
             <div class="section-label">
-                🚛 Kendaraan Terbanyak Jarak — {{ $filterLabel }}
+                 Kendaraan Terbanyak Jarak — {{ $filterLabel }}
             </div>
             @if($topVehicles->isEmpty())
             <p class="text-sm text-gray-400 text-center py-6">Belum ada data.</p>
@@ -281,7 +281,7 @@
         {{-- Top Drowsy Drivers --}}
         <div class="card p-4">
             <div class="section-label">
-                ⚠️ Driver Sering Ngantuk — {{ $filterLabel }}
+                 Driver Sering Ngantuk — {{ $filterLabel }}
             </div>
             @if($topDrowsyDrivers->isEmpty())
             <p class="text-sm text-gray-400 text-center py-6">Belum ada data.</p>
@@ -299,7 +299,7 @@
                     <div style="text-align:right;flex-shrink:0;">
                         <div style="font-size:13px;font-weight:700;color:#f97316;">{{ $dd->drowsy_count }} <span style="font-size:10px;color:#9ca3af;font-weight:400;">event</span></div>
                         @if($dd->alarm_count > 0)
-                        <div style="font-size:10px;font-weight:700;color:#dc2626;">🚨 {{ $dd->alarm_count }} alarm</div>
+                        <div style="font-size:10px;font-weight:700;color:#dc2626;"> {{ $dd->alarm_count }} alarm</div>
                         @else
                         <div style="font-size:10px;color:#9ca3af;">0 alarm</div>
                         @endif
@@ -316,7 +316,7 @@
             {{-- Recent unread alerts --}}
             <div class="card p-4">
                 <div class="section-label">
-                    🔔 Alert Terbaru
+                     Alert Terbaru
                     @if($recentAlerts->count() > 0)
                     <span style="margin-left:auto;padding:2px 8px;background:#fee2e2;color:#b91c1c;font-size:10px;font-weight:700;border-radius:99px;">{{ $recentAlerts->count() }} unread</span>
                     @endif
@@ -349,7 +349,7 @@
             @if($expiringDrivers->count() > 0)
             <div class="card p-4">
                 <div class="section-label">
-                    ⚠️ Status SIM Supir
+                     Status SIM Supir
                 </div>
                 @foreach($expiringDrivers as $d)
                 @php
