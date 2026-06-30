@@ -214,11 +214,33 @@ class TripController extends Controller
             ];
         });
 
-        // ── Deteksi celah sinyal & pecah jalur jadi beberapa segmen ──────
+        // ── Deteksi celah sinyal (dari data mentah agar akurat) ──────
         // >30 detik tanpa data baru dianggap sinyal putus (interval normal ±5 detik)
         $gapThresholdSec = 30;
-        $gpsSegments     = [];
         $signalGaps      = [];
+        $rawCount        = count($gpsPoints);
+
+        for ($i = 0; $i < $rawCount - 1; $i++) {
+            $rawTs1 = $gpsPoints[$i]->gps_timestamp;
+            $rawTs2 = $gpsPoints[$i + 1]->gps_timestamp;
+            $t1     = \Carbon\Carbon::parse(($rawTs1 instanceof \Carbon\Carbon ? $rawTs1->format('Y-m-d H:i:s') : $rawTs1), 'UTC');
+            $t2     = \Carbon\Carbon::parse(($rawTs2 instanceof \Carbon\Carbon ? $rawTs2->format('Y-m-d H:i:s') : $rawTs2), 'UTC');
+            $gapSec = abs($t1->diffInSeconds($t2));
+
+            if ($gapSec > $gapThresholdSec) {
+                $signalGaps[] = [
+                    '_start_utc'   => $t1->copy(),
+                    'start_at'     => $t1->copy()->setTimezone('Asia/Jakarta')->toISOString(),
+                    'end_at'       => $t2->copy()->setTimezone('Asia/Jakarta')->toISOString(),
+                    'duration_sec' => $gapSec,
+                    'lat'          => $gpsPoints[$i]->latitude,
+                    'lng'          => $gpsPoints[$i]->longitude,
+                ];
+            }
+        }
+
+        // ── Pecah jalur jadi beberapa segmen (untuk gambar rute di peta) ──────
+        $gpsSegments     = [];
         $currentSegment  = [];
         $pointCount      = count($gpsPointsForMap);
 
@@ -226,35 +248,34 @@ class TripController extends Controller
             $currentSegment[] = $point;
 
             if ($i < $pointCount - 1) {
-                // gps_timestamp adalah Carbon object; app tz = Asia/Jakarta sehingga DB UTC
-                // harus di-parse ulang secara eksplisit sebagai UTC agar diffInSeconds benar
                 $rawTs1 = $point['gps_timestamp'];
                 $rawTs2 = $gpsPointsForMap[$i + 1]['gps_timestamp'];
-                $t1     = \Carbon\Carbon::parse(
-                    ($rawTs1 instanceof \Carbon\Carbon ? $rawTs1->format('Y-m-d H:i:s') : $rawTs1), 'UTC'
-                );
-                $t2     = \Carbon\Carbon::parse(
-                    ($rawTs2 instanceof \Carbon\Carbon ? $rawTs2->format('Y-m-d H:i:s') : $rawTs2), 'UTC'
-                );
-                $gapSec = abs($t1->diffInSeconds($t2));
+                $t1     = \Carbon\Carbon::parse(($rawTs1 instanceof \Carbon\Carbon ? $rawTs1->format('Y-m-d H:i:s') : $rawTs1), 'UTC');
+                $t2     = \Carbon\Carbon::parse(($rawTs2 instanceof \Carbon\Carbon ? $rawTs2->format('Y-m-d H:i:s') : $rawTs2), 'UTC');
+                
+                $hasTrueGap = false;
+                foreach ($signalGaps as $gap) {
+                    if ($gap['_start_utc']->greaterThanOrEqualTo($t1) && $gap['_start_utc']->lessThan($t2)) {
+                        $hasTrueGap = true;
+                        break;
+                    }
+                }
 
-                if ($gapSec > $gapThresholdSec) {
+                if ($hasTrueGap) {
                     $gpsSegments[]  = $currentSegment;
                     $currentSegment = [];
-
-                    $signalGaps[] = [
-                        'start_at'     => $t1->setTimezone('Asia/Jakarta')->toISOString(),
-                        'end_at'       => $t2->setTimezone('Asia/Jakarta')->toISOString(),
-                        'duration_sec' => $gapSec,
-                        'lat'          => $point['latitude'],
-                        'lng'          => $point['longitude'],
-                    ];
                 }
             }
         }
         if (!empty($currentSegment)) {
             $gpsSegments[] = $currentSegment;
         }
+
+        // Bersihkan field temporary _start_utc agar tidak ikut terkirim ke view/JS
+        $signalGaps = array_map(function($gap) {
+            unset($gap['_start_utc']);
+            return $gap;
+        }, $signalGaps);
 
         // ── Deteksi keluar jalur (route deviation) ──────────────────
         $routeDeviations = [];
