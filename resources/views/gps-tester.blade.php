@@ -352,6 +352,7 @@ async function sendPosition() {
                 'Accept':                     'application/json',
                 'ngrok-skip-browser-warning': 'true',
                 'X-CSRF-TOKEN':               document.querySelector('meta[name="csrf-token"]')?.content || '',
+                'X-Device-Key':               '{{ config('services.iot.api_key') }}',
             },
             body: JSON.stringify(payload),
         });
