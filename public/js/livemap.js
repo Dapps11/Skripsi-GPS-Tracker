@@ -42,12 +42,35 @@ function showToast(msg) {
 // ════════════════════════════════════════════════════════════════
 // SHARED HELPERS
 // ════════════════════════════════════════════════════════════════
+// Helper sample points (naïve)
 function samplePoints(pts, max) {
     if (pts.length <= max) return pts;
     const r = [pts[0]], step = (pts.length - 2) / (max - 2);
     for (let i = 1; i < max - 1; i++) r.push(pts[Math.round(i * step)]);
     r.push(pts[pts.length - 1]);
     return r;
+}
+
+// Helper strategic waypoints (menghindari rute muter-muter akibat noise GPS)
+// Mengambil titik GPS dengan kecepatan memadai sehingga dipastikan berada di jalan utama
+function getStrategicWaypoints(pts, count = 3) {
+    if (pts.length < 10) return [];
+    
+    // Filter titik dengan kecepatan memadai (>15 km/h)
+    const valid = pts.filter(p => (parseFloat(p.speed_kmh) || 0) > 15);
+    
+    if (valid.length < count) {
+        // Fallback jika tidak ada data kecepatan
+        return samplePoints(pts, count + 2).slice(1, -1);
+    }
+    
+    // Ambil sampel secara merata dari titik berkecepatan tinggi
+    const step = valid.length / (count + 1);
+    const result = [];
+    for (let i = 1; i <= count; i++) {
+        result.push(valid[Math.floor(i * step)]);
+    }
+    return result;
 }
 
 function haversineJS(lat1, lng1, lat2, lng2) {
@@ -140,7 +163,10 @@ function initOSM() {
 
     (async () => {
         if (activeTrip && activeTrip.origin_lat) {
-            const rc = await drawOSMRoute(+activeTrip.origin_lat, +activeTrip.origin_lng, +activeTrip.dest_lat, +activeTrip.dest_lng);
+            const oLat = +activeTrip.origin_lat, oLng = +activeTrip.origin_lng;
+            const dLat = +activeTrip.dest_lat,   dLng = +activeTrip.dest_lng;
+            const rc = await drawOSMRoute(oLat, oLng, dLat, dLng);
+            drawOSMHaversine(oLat, oLng, dLat, dLng);
             if (gpsPoints.length >= 2) drawOSMTrack(gpsPoints);
             if (rc && rc.length) osmMap.fitBounds(rc, { padding:[80, 420] });
         } else {
@@ -157,6 +183,7 @@ function initOSM() {
         d.innerHTML = `
             <div style="font-weight:700;color:#374151;margin-bottom:4px;">Keterangan</div>
             <div style="display:flex;align-items:center;gap:6px;"><div style="width:28px;height:4px;background:#4f46e5;border-radius:2px;"></div><span style="color:#4f46e5;font-weight:600;">Rute Jalan</span></div>
+            <div style="display:flex;align-items:center;gap:6px;"><div style="width:28px;height:0;border-top:3px dashed #16a34a;"></div><span style="color:#16a34a;font-weight:600;">Haversine (Garis Lurus)</span></div>
             <div style="display:flex;align-items:center;gap:6px;"><div style="width:28px;height:4px;background:#f97316;border-radius:2px;"></div><span style="color:#f97316;font-weight:600;">Riwayat GPS</span></div>
             <div style="display:flex;align-items:center;gap:6px;"><div style="width:14px;height:14px;background:#22c55e;border-radius:50%;border:2px solid white;"></div><span>Titik Awal</span></div>
             <div style="display:flex;align-items:center;gap:6px;"><div style="width:14px;height:14px;background:#ef4444;border-radius:50%;border:2px solid white;"></div><span>Titik Tujuan</span></div>`;
@@ -179,7 +206,19 @@ function drawOSMTrack(points) {
 
 async function drawOSMRoute(oLat, oLng, dLat, dLng) {
     try {
-        const res  = await fetch(`https://router.project-osrm.org/route/v1/driving/${oLng},${oLat};${dLng},${dLat}?overview=full&geometries=geojson`, { signal: AbortSignal.timeout(8000) });
+        let osrmCoords;
+        if (gpsPoints && gpsPoints.length >= 10) {
+            const strategic = getStrategicWaypoints(gpsPoints, 3);
+            osrmCoords = [
+                `${oLng},${oLat}`,
+                ...strategic.map(p => `${+p.longitude},${+p.latitude}`),
+                `${dLng},${dLat}`
+            ].join(';');
+        } else {
+            osrmCoords = `${oLng},${oLat};${dLng},${dLat}`;
+        }
+
+        const res  = await fetch(`https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`, { signal: AbortSignal.timeout(8000) });
         const data = await res.json();
         if (data.code !== 'Ok' || !data.routes.length) throw new Error('no route');
         const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
@@ -194,6 +233,28 @@ async function drawOSMRoute(oLat, oLng, dLat, dLng) {
         osmRouteMain = L.polyline(coords, { color:'#4f46e5', weight:4, opacity:.6, dashArray:'10,7' }).addTo(osmMap);
         return coords;
     }
+}
+
+/**
+ * Gambar garis lurus hijau (Haversine) dari origin ke destination di OSM.
+ */
+function drawOSMHaversine(oLat, oLng, dLat, dLng) {
+    const distKm = haversineJS(oLat, oLng, dLat, dLng).toFixed(2);
+    // Shadow hijau
+    L.polyline([[oLat, oLng], [dLat, dLng]], {
+        color: '#86efac', weight: 10, opacity: 0.22,
+        lineCap: 'round', lineJoin: 'round'
+    }).addTo(osmMap);
+    // Garis hijau putus-putus utama
+    L.polyline([[oLat, oLng], [dLat, dLng]], {
+        color: '#16a34a', weight: 3.5, opacity: 0.9,
+        dashArray: '12, 7', lineCap: 'round', lineJoin: 'round'
+    }).addTo(osmMap)
+     .bindPopup(
+        `<div style="font-weight:700;color:#16a34a;font-size:12px;">📏 Jarak Haversine (Garis Lurus)</div>
+         <div style="font-size:11px;color:#6b7280;margin-top:4px;">Jarak lurus: <b>${distKm} km</b></div>
+         <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Tanpa memperhitungkan jalan / rute</div>`
+    );
 }
 
 // ════════════════════════════════════════════════════════════════
@@ -299,6 +360,12 @@ window.onLiveGmapReady = function () {
 
     if (activeTrip) {
         drawGoogleRoute();
+        if (activeTrip.origin_lat && activeTrip.dest_lat) {
+            drawGoogleHaversine(
+                +activeTrip.origin_lat, +activeTrip.origin_lng,
+                +activeTrip.dest_lat,   +activeTrip.dest_lng
+            );
+        }
         if (gpsPoints.length >= 2) drawGoogleTrack(gpsPoints);
         if (activeTrip.origin_lat) {
             const bounds = new google.maps.LatLngBounds();
@@ -317,18 +384,100 @@ window.onLiveGmapReady = function () {
     }
 };
 
-function drawGoogleRoute() {
+async function drawGoogleRoute() {
     if (!gMap || !activeTrip) return;
-    const svc = new google.maps.DirectionsService();
-    const rdr = new google.maps.DirectionsRenderer({
-        map: gMap, suppressMarkers: true,
-        polylineOptions: { strokeColor:'#4f46e5', strokeWeight:5, strokeOpacity:.88 },
+
+    try {
+        let osrmCoords;
+        if (gpsPoints && gpsPoints.length >= 10) {
+            const strategic = getStrategicWaypoints(gpsPoints, 3);
+            osrmCoords = [
+                `${+activeTrip.origin_lng},${+activeTrip.origin_lat}`,
+                ...strategic.map(p => `${+p.longitude},${+p.latitude}`),
+                `${+activeTrip.dest_lng},${+activeTrip.dest_lat}`
+            ].join(';');
+        } else {
+            osrmCoords = `${+activeTrip.origin_lng},${+activeTrip.origin_lat};${+activeTrip.dest_lng},${+activeTrip.dest_lat}`;
+        }
+
+        const url = `https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`;
+        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
+        const data = await res.json();
+
+        if (data.code === 'Ok' && data.routes.length) {
+            // OSRM [lng, lat] -> Google {lat, lng}
+            const path = data.routes[0].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+            
+            // Shadow biru
+            new google.maps.Polyline({
+                path, map: gMap,
+                strokeColor: '#818cf8', strokeOpacity: 0.2, strokeWeight: 10,
+                zIndex: 1,
+            });
+            // Garis biru utama
+            new google.maps.Polyline({
+                path, map: gMap,
+                strokeColor: '#4f46e5', strokeOpacity: 0.88, strokeWeight: 5,
+                zIndex: 2,
+            });
+        }
+    } catch(e) {
+        // Fallback garis putus-putus
+        new google.maps.Polyline({
+            path: [
+                { lat: +activeTrip.origin_lat, lng: +activeTrip.origin_lng },
+                { lat: +activeTrip.dest_lat,   lng: +activeTrip.dest_lng }
+            ],
+            map: gMap,
+            strokeColor: '#4f46e5', strokeOpacity: 0.6, strokeWeight: 4,
+            icons: [{ icon: { path: 'M 0,-1 0,1', strokeOpacity: 0.6, scale: 2 }, offset: '0', repeat: '15px' }],
+            zIndex: 1,
+        });
+    }
+}
+
+/**
+ * Gambar garis lurus hijau (Haversine) dari origin ke destination di Google Maps.
+ */
+function drawGoogleHaversine(oLat, oLng, dLat, dLng) {
+    const distKm = haversineJS(oLat, oLng, dLat, dLng).toFixed(2);
+    // Shadow hijau
+    new google.maps.Polyline({
+        path: [{ lat: oLat, lng: oLng }, { lat: dLat, lng: dLng }],
+        map: gMap,
+        strokeColor: '#86efac', strokeOpacity: 0.3, strokeWeight: 10,
+        zIndex: 1,
     });
-    svc.route({
-        origin:      { lat: +activeTrip.origin_lat, lng: +activeTrip.origin_lng },
-        destination: { lat: +activeTrip.dest_lat,   lng: +activeTrip.dest_lng },
-        travelMode:  google.maps.TravelMode.DRIVING,
-    }, (result, status) => { if (status === 'OK') rdr.setDirections(result); });
+    // Garis putus-putus hijau utama
+    const haversineLine = new google.maps.Polyline({
+        path: [{ lat: oLat, lng: oLng }, { lat: dLat, lng: dLng }],
+        map: gMap,
+        strokeColor: '#16a34a', strokeOpacity: 0,
+        strokeWeight: 3.5,
+        icons: [{
+            icon: {
+                path: 'M 0,-1 0,1',
+                strokeOpacity: 0.95,
+                strokeColor: '#16a34a',
+                strokeWeight: 3.5,
+                scale: 4,
+            },
+            offset: '0',
+            repeat: '18px',
+        }],
+        zIndex: 2,
+    });
+    // InfoWindow saat klik garis Haversine
+    const haverInfoWin = new google.maps.InfoWindow();
+    haversineLine.addListener('click', (e) => {
+        haverInfoWin.setContent(
+            `<div style="font-weight:700;color:#16a34a;font-size:12px;">📏 Jarak Haversine (Garis Lurus)</div>
+             <div style="font-size:11px;color:#6b7280;margin-top:4px;">Jarak lurus: <b>${distKm} km</b></div>
+             <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Tanpa memperhitungkan jalan / rute</div>`
+        );
+        haverInfoWin.setPosition(e.latLng);
+        haverInfoWin.open(gMap);
+    });
 }
 
 async function drawGoogleTrack(points) {

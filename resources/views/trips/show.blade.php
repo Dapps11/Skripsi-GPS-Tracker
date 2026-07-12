@@ -279,14 +279,14 @@
             </div>
 
             <div class="stat-box">
-                <div class="stat-label"> Melenceng dari Rute</div>
+                <div class="stat-label"> Keluar Jalur</div>
                 <div class="stat-value">
-                    {{ count($routeDeviations) }}
+                    <span id="dev-count">...</span>
                     <span class="stat-unit">kali</span>
                 </div>
-                @if(empty($routeDeviations))
-                <div style="font-size:10px;color:#9ca3af;margin-top:2px;">Sesuai rute</div>
-                @endif
+                <div id="dev-info-box" style="font-size:10px;color:#9ca3af;margin-top:2px;">
+                    Menghitung...
+                </div>
             </div>
 
             <div class="stat-box">
@@ -391,6 +391,10 @@
                     <span style="color:#4f46e5;font-weight:600;">Rute Jalan</span>
                 </div>
                 <div class="legend-item">
+                    <div class="legend-line" style="background:#16a34a;border-top:2px dashed #16a34a;height:0;border-radius:0;"></div>
+                    <span style="color:#16a34a;font-weight:600;">Haversine (Garis Lurus)</span>
+                </div>
+                <div class="legend-item">
                     <div class="legend-line" style="background:#f97316;"></div>
                     <span style="color:#f97316;font-weight:600;">Riwayat GPS</span>
                 </div>
@@ -410,10 +414,10 @@
                     <div class="legend-dot" style="background:#7c3aed;box-shadow:0 0 0 2px #7c3aed55;"></div>
                     <span style="color:#7c3aed;font-weight:600;">Sinyal Terputus ({{ count($signalGaps) }})</span>
                 </div>
-                <!-- <div class="legend-item">
-                    <div class="legend-dot" style="background:#d97706;box-shadow:0 0 0 2px #d9770655;"></div>
-                    <span style="color:#d97706;font-weight:600;">Melenceng dari Rute ({{ count($routeDeviations) }})</span>
-                </div> -->
+                <div class="legend-item" id="legend-dev-item" style="display:none;">
+                    <div class="legend-line" style="background:#dc2626;border-top:2px dashed #dc2626;height:0;border-radius:0;"></div>
+                    <span style="color:#dc2626;font-weight:600;" id="legend-dev-text">Keluar Jalur (0×)</span>
+                </div>
             </div>
             @endif
         </div>
@@ -707,9 +711,10 @@ window.__tripshow = {
     gpsSegments:      @json($gpsSegments ?? []),
     signalGaps:       @json($signalGaps ?? []),
     monitoringEvents: @json($monitoringForChart),
-    routeDeviations:  @json($routeDeviations ?? []),
+    routeDeviations:  [], // Akan diisi oleh JS
     intensityChart:   @json($intensityChart ?? []),
     alertChart:       @json($alertChart ?? []),
+    intendedRoutePolyline: null, // Akan diisi oleh JS
 };
 
 // ── Toggle grafik ────────────────────────────────────────────────

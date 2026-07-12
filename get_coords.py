@@ -15,6 +15,7 @@ def haversine(lat1, lon1, lat2, lon2):
     c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
     return R * c
 
+print  (c)
 db = mysql.connector.connect(host="127.0.0.1", port=3307, user="root", password="", database="skripsi_production_clone")
 cursor = db.cursor(dictionary=True)
 

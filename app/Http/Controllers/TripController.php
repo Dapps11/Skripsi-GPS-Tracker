@@ -279,18 +279,7 @@ class TripController extends Controller
             return $gap;
         }, $signalGaps);
 
-        // ── Deteksi keluar jalur (route deviation) ──────────────────
-        $routeDeviations = [];
-        if ($trip->origin_lat && $trip->dest_lat && $gpsPoints->count() >= 2) {
-            $routeDeviations = $this->detectRouteDeviations(
-                $gpsPoints,
-                $trip->origin_lat, $trip->origin_lng,
-                $trip->dest_lat,   $trip->dest_lng,
-                150,   // maxDistanceMeters (diperkecil karena tol dan arteri sering sejajar dekat)
-                2,     // minDurationMinutes (minimal 2 menit)
-                1      // minOccurrences (minimal 1 kali pelanggaran sudah dicatat)
-            );
-        }
+
 
         // ── Grafik 1 & 2 (Intensitas Alarm & Kewaspadaan) ──────────────────
         $intensityChart = [];
@@ -374,7 +363,7 @@ class TripController extends Controller
         return view('trips.show', compact(
             'trip', 'gpsPoints', 'gpsPointsForMap', 'mapType', 'googleMapsKey',
             'etaHaversine', 'distHaversine', 'stops', 'monitoringEvents', 'monitoringForChart',
-            'gpsSegments', 'signalGaps', 'routeDeviations',
+            'gpsSegments', 'signalGaps',
             'intensityChart', 'alertChart', 'spanMin'
         ));
     }
@@ -599,171 +588,7 @@ class TripController extends Controller
         return $R * 2 * atan2(sqrt($a), sqrt(1-$a));
     }
 
-    /**
-     * Mengambil rute aktual (polyline) dari OSRM dan menyimpannya ke cache.
-     */
-    private function getOsrmPolyline(float $oLat, float $oLng, float $dLat, float $dLng): array
-    {
-        $cacheKey = "route_{$oLat}_{$oLng}_{$dLat}_{$dLng}";
-        return \Illuminate\Support\Facades\Cache::remember($cacheKey, 604800, function () use ($oLat, $oLng, $dLat, $dLng) {
-            try {
-                $url = "https://router.project-osrm.org/route/v1/driving/{$oLng},{$oLat};{$dLng},{$dLat}?overview=full&geometries=geojson";
-                $response = \Illuminate\Support\Facades\Http::timeout(10)->get($url);
-                if ($response->successful()) {
-                    $data = $response->json();
-                    if ($data['code'] === 'Ok' && !empty($data['routes'])) {
-                        $coordinates = $data['routes'][0]['geometry']['coordinates'] ?? [];
-                        // OSRM [lng, lat] -> kita butuh [lat, lng]
-                        return array_map(function($c) {
-                            return [$c[1], $c[0]];
-                        }, $coordinates);
-                    }
-                }
-            } catch (\Exception $e) {
-                // Ignore
-            }
-            // Fallback ke garis lurus
-            return [[$oLat, $oLng], [$dLat, $dLng]];
-        });
-    }
 
-    /**
-     * Hitung jarak titik ke polyline (rute jalan).
-     * Memproyeksikan titik ke segmen jalan terdekat menggunakan flat-earth approximation.
-     * Return dalam meter.
-     */
-    private function pointToPolylineDist(float $ptLat, float $ptLng, array $polyline): float
-    {
-        $minDist = PHP_FLOAT_MAX;
-        $count = count($polyline);
-        if ($count == 0) return 0;
-        if ($count == 1) {
-            return $this->haversine($ptLat, $ptLng, $polyline[0][0], $polyline[0][1]) * 1000;
-        }
-
-        $R = 6371000; // bumi dalam meter
-        $xP = deg2rad($ptLng) * $R * cos(deg2rad($ptLat));
-        $yP = deg2rad($ptLat) * $R;
-
-        for ($i = 0; $i < $count - 1; $i++) {
-            $aLat = $polyline[$i][0];
-            $aLng = $polyline[$i][1];
-            $bLat = $polyline[$i+1][0];
-            $bLng = $polyline[$i+1][1];
-
-            $xA = deg2rad($aLng) * $R * cos(deg2rad($aLat));
-            $yA = deg2rad($aLat) * $R;
-            
-            $xB = deg2rad($bLng) * $R * cos(deg2rad($bLat));
-            $yB = deg2rad($bLat) * $R;
-            
-            $dx = $xB - $xA;
-            $dy = $yB - $yA;
-            $len2 = $dx * $dx + $dy * $dy;
-            
-            if ($len2 == 0) {
-                $dist = sqrt(pow($xP - $xA, 2) + pow($yP - $yA, 2));
-            } else {
-                $t = (($xP - $xA) * $dx + ($yP - $yA) * $dy) / $len2;
-                $t = max(0, min(1, $t));
-                $projX = $xA + $t * $dx;
-                $projY = $yA + $t * $dy;
-                $dist = sqrt(pow($xP - $projX, 2) + pow($yP - $projY, 2));
-            }
-
-            if ($dist < $minDist) {
-                $minDist = $dist;
-            }
-        }
-        
-        return $minDist;
-    }
-
-    /**
-     * Deteksi keluar jalur dari koridor origin→dest.
-     *
-     * @param  \Illuminate\Support\Collection $gpsPoints
-     * @param  float $oLat Origin latitude
-     * @param  float $oLng Origin longitude
-     * @param  float $dLat Destination latitude
-     * @param  float $dLng Destination longitude
-     * @param  int   $maxDistanceMeters Threshold jarak keluar koridor
-     * @param  int   $minDurationMinutes Durasi minimum deviasi
-     * @param  int   $minOccurrences Jumlah minimum deviasi untuk ditampilkan
-     * @return array List of route deviations
-     */
-    private function detectRouteDeviations($gpsPoints, float $oLat, float $oLng, float $dLat, float $dLng, int $maxDistanceMeters = 500, int $minDurationMinutes = 3, int $minOccurrences = 2): array
-    {
-        $pts     = $gpsPoints->values();
-        $total   = $pts->count();
-        if ($total < 2) return [];
-
-        $parseUTC = fn($pt) => \Carbon\Carbon::parse(
-            $pt->gps_timestamp->format('Y-m-d H:i:s'), 'UTC'
-        );
-
-        $polyline = $this->getOsrmPolyline($oLat, $oLng, $dLat, $dLng);
-
-        $raw = [];
-        $i   = 0;
-        while ($i < $total) {
-            $pt = $pts[$i];
-            $dist = $this->pointToPolylineDist(
-                (float)$pt->latitude, (float)$pt->longitude,
-                $polyline
-            );
-
-            if ($dist > $maxDistanceMeters) {
-                // Start of deviation
-                $startIdx = $i;
-                $maxDist  = $dist;
-                $j = $i;
-
-                while ($j + 1 < $total) {
-                    $nextDist = $this->pointToPolylineDist(
-                        (float)$pts[$j + 1]->latitude, (float)$pts[$j + 1]->longitude,
-                        $polyline
-                    );
-                    if ($nextDist > $maxDistanceMeters) {
-                        $maxDist = max($maxDist, $nextDist);
-                        $j++;
-                    } else {
-                        break;
-                    }
-                }
-
-                $startTime = $parseUTC($pts[$startIdx]);
-                $endTime   = $parseUTC($pts[$j]);
-                $durMin    = $startTime->diffInSeconds($endTime) / 60;
-
-                if ($durMin >= $minDurationMinutes) {
-                    $midIdx = $startIdx + intdiv($j - $startIdx, 2);
-                    $midPt  = $pts[$midIdx];
-                    $raw[] = [
-                        'lat'          => (float) $midPt->latitude,
-                        'lng'          => (float) $midPt->longitude,
-                        'max_distance_m' => (int) round($maxDist),
-                        'started_at'   => $startTime->setTimezone('Asia/Jakarta')->format('H:i:s'),
-                        'ended_at'     => $endTime->setTimezone('Asia/Jakarta')->format('H:i:s'),
-                        'duration_sec' => (int) $startTime->diffInSeconds($endTime),
-                        'duration_label' => $durMin >= 60
-                            ? intdiv((int)$durMin, 60) . 'j ' . ((int)$durMin % 60) . 'm'
-                            : ((int)$durMin) . ' menit',
-                    ];
-                }
-                $i = $j + 1;
-            } else {
-                $i++;
-            }
-        }
-
-        // Hanya tampilkan jika jumlah deviasi >= minOccurrences
-        if (count($raw) < $minOccurrences) {
-            return [];
-        }
-
-        return $raw;
-    }
 
     public function edit(Trip $trip)
     {
