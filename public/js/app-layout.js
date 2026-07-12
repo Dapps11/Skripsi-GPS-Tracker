@@ -28,8 +28,13 @@ window.addEventListener('resize', () => {
 
 
 document.addEventListener('DOMContentLoaded', function () {
+    // ── Track WS status globally ──────────────────────────────────
+    window.__wsConnected = false;
+
     if (typeof window.Echo === 'undefined') {
         console.warn('Laravel Echo tidak tersedia. Pastikan npm run build sudah dijalankan.');
+        // WS tidak ada, langsung mulai polling
+        startFleetPolling();
         return;
     }
 
@@ -38,6 +43,7 @@ document.addEventListener('DOMContentLoaded', function () {
     const wsText = document.getElementById('ws-text');
 
     function setWSStatus(connected) {
+        window.__wsConnected = connected;
         if (wsDot) wsDot.style.background = connected ? '#22c55e' : '#ef4444';
         if (wsText) wsText.textContent = connected ? 'Live' : 'Off';
         if (wsText) wsText.style.color = connected ? '#15803d' : '#b91c1c';
@@ -70,23 +76,10 @@ document.addEventListener('DOMContentLoaded', function () {
         })
 
         .listen('.fleet.status.updated', (data) => {
-            ['cnt-moving', 'cnt-idle', 'cnt-offline'].forEach((id, i) => {
-                const el = document.getElementById(id);
-                if (el) el.textContent = [data.moving, data.idle, data.offline][i] || 0;
-            });
+            applyFleetData(data);
             if (typeof window.updateDashboardFleet === 'function') {
                 window.updateDashboardFleet(data);
             }
-            // Header badge
-            const active = Number(data.moving || 0) + Number(data.idle || 0);
-            const total = Number(data.total_vehicles || 0);
-            const hdrEl = document.getElementById('hdr-active-text');
-            if (hdrEl) hdrEl.textContent = `${active} TRUCKS ACTIVE`;
-            // Sidebar fleet bar
-            const cntEl = document.getElementById('sb-fleet-count');
-            const barEl = document.getElementById('sb-fleet-bar');
-            if (cntEl) cntEl.textContent = `${active}/${total}`;
-            if (barEl && total > 0) barEl.style.width = `${Math.round((active / total) * 100)}%`;
         })
 
         .listen('.trip.status.updated', (data) => {
@@ -94,21 +87,45 @@ document.addEventListener('DOMContentLoaded', function () {
                 window.handleTripUpdate(data);
             }
         });
+
+    // Mulai polling juga (sebagai fallback kalau WS tidak konek)
+    startFleetPolling();
 });
 
-// ── Fleet summary — init saat halaman load ────────────────────────
-fetch('/api/internal/fleet-summary')
-    .then(r => r.json())
-    .then(d => {
-        const active = Number(d.moving || 0) + Number(d.idle || 0);
-        const total = Number(d.total_vehicles || 0);
-        const hdrEl = document.getElementById('hdr-active-text');
-        const cntEl = document.getElementById('sb-fleet-count');
-        const barEl = document.getElementById('sb-fleet-bar');
-        if (hdrEl) hdrEl.textContent = `${active} TRUCKS ACTIVE`;
-        if (cntEl) cntEl.textContent = `${active}/${total}`;
-        if (barEl && total > 0) barEl.style.width = `${Math.round((active / total) * 100)}%`;
-    }).catch(() => { });
+// ── Reusable: apply fleet data ke UI ──────────────────────────────
+function applyFleetData(d) {
+    // Dashboard fleet counters
+    ['cnt-moving', 'cnt-idle', 'cnt-offline'].forEach((id, i) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = [d.moving, d.idle, d.offline][i] || 0;
+    });
+    // Header badge
+    const active = Number(d.moving || 0) + Number(d.idle || 0);
+    const total = Number(d.total_vehicles || 0);
+    const hdrEl = document.getElementById('hdr-active-text');
+    if (hdrEl) hdrEl.textContent = `${active} TRUCKS ACTIVE`;
+    // Sidebar fleet bar
+    const cntEl = document.getElementById('sb-fleet-count');
+    const barEl = document.getElementById('sb-fleet-bar');
+    if (cntEl) cntEl.textContent = `${active}/${total}`;
+    if (barEl && total > 0) barEl.style.width = `${Math.round((active / total) * 100)}%`;
+}
+
+// ── Fleet summary polling (fallback saat WS tidak konek) ──────────
+function fetchFleetSummary() {
+    fetch('/api/internal/fleet-summary')
+        .then(r => r.json())
+        .then(d => applyFleetData(d))
+        .catch(() => { });
+}
+
+function startFleetPolling() {
+    // Fetch langsung saat load
+    fetchFleetSummary();
+    // Polling tiap 15 detik — SELALU jalan, ringan (1 query kecil)
+    setInterval(fetchFleetSummary, 15000);
+}
+
 
 // ════════════════════════════════════════════════════════════════
 // ════════════════════════════════════════════════════════════════

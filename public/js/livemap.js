@@ -777,8 +777,49 @@ window.handleTripUpdate = function(data) {
 // ════════════════════════════════════════════════════════════════
 // TIMERS — satu tempat, tidak duplikat
 // ════════════════════════════════════════════════════════════════
-let apiEtaTimer   = null;
-let fallbackTimer = null;
+let apiEtaTimer    = null;
+let fallbackTimer  = null;
+let positionTimer  = null;
+
+// ════════════════════════════════════════════════════════════════
+// POLLING: Vehicle positions (updates all markers on map)
+// ════════════════════════════════════════════════════════════════
+async function pollVehiclePositions() {
+    try {
+        const vehicles = await fetch('/api/internal/vehicles-position').then(r => r.json());
+        if (!Array.isArray(vehicles)) return;
+
+        vehicles.forEach(v => {
+            if (!v.latitude || !v.longitude) return;
+            const vid = String(v.vehicle_id);
+            const lat = +v.latitude, lng = +v.longitude;
+            const status = v.vehicle_status || 'offline';
+            const speed  = v.speed_kmh || 0;
+            const isActive = activeTrip && String(activeTrip.vehicle_id) === vid;
+
+            // Update OSM markers
+            if (osmMarkers[vid]) {
+                osmMarkers[vid].marker.setLatLng([lat, lng]);
+                const mkFn = osmMarkers[vid].mkIcon;
+                if (mkFn) osmMarkers[vid].marker.setIcon(mkFn(status, isActive));
+                // Update popup if open
+                const popupFn = osmMarkers[vid].popupFn;
+                if (popupFn) {
+                    const popup = osmMarkers[vid].marker.getPopup();
+                    if (popup && popup.isOpen()) {
+                        popup.setContent(popupFn(speed, status));
+                    }
+                }
+            }
+
+            // Update Google Maps markers
+            if (gVMarkers[vid] && gMapReady) {
+                gVMarkers[vid].marker.setPosition({ lat, lng });
+                gVMarkers[vid].marker.setIcon(mkGIcon(status, isActive));
+            }
+        });
+    } catch(e) { /* silently ignore */ }
+}
 
 // ════════════════════════════════════════════════════════════════
 // INIT — dipanggil SEKALI di paling bawah
@@ -788,6 +829,11 @@ if (MAP_TYPE === 'gmaps') {
 } else {
     initOSM();
 }
+
+// ── Vehicle positions polling — SELALU jalan (tiap 10 detik) ─────
+// Ini memastikan marker di peta selalu update meskipun WS tidak konek.
+pollVehiclePositions();
+positionTimer = setInterval(pollVehiclePositions, 10000);
 
 if (activeTrip) {
     // ── Isi panel langsung dari gpsPoints yang sudah ada di halaman ──
@@ -827,21 +873,15 @@ if (activeTrip) {
     pollAPIeta();
     apiEtaTimer = setInterval(pollAPIeta, 30000);
 
-    // Fallback polling tiap 10 detik — HANYA jika WebSocket tidak konek
-    let wsConnected = false;
-    if (typeof window.Echo !== 'undefined') {
-        window.Echo.connector.pusher.connection.bind('connected',    () => { wsConnected = true; });
-        window.Echo.connector.pusher.connection.bind('disconnected', () => { wsConnected = false; });
-    }
+    // Fallback polling tiap 10 detik — update GPS track & panel values
     fallbackTimer = setInterval(() => {
-        if (!wsConnected) {
-            updateTrackFromServer();
-            pollAPIeta();  // Update sisa jarak & ETA juga
-        }
+        updateTrackFromServer();
+        pollAPIeta();
     }, 10000);
 }
 
 window.addEventListener('beforeunload', () => {
     if (apiEtaTimer)   clearInterval(apiEtaTimer);
     if (fallbackTimer) clearInterval(fallbackTimer);
+    if (positionTimer) clearInterval(positionTimer);
 });
