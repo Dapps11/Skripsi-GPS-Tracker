@@ -636,8 +636,8 @@ async function fetchInitialAPIeta() {
 async function pollAPIeta() {
     if (!activeTrip) return;
     try {
-        const data = await fetch(`/api/internal/trip/${activeTrip.vehicle_id}`)
-                           .then(r => r.json());
+        let data = await fetch(`/api/internal/trip/${activeTrip.vehicle_id}`)
+                         .then(r => r.json());
 
         if (!data?.trip?.current_lat) {
             // Fallback ke GPS point terakhir yang sudah ada di halaman
@@ -834,7 +834,10 @@ if (activeTrip) {
         window.Echo.connector.pusher.connection.bind('disconnected', () => { wsConnected = false; });
     }
     fallbackTimer = setInterval(() => {
-        if (!wsConnected) updateTrackFromServer();
+        if (!wsConnected) {
+            updateTrackFromServer();
+            pollAPIeta();  // Update sisa jarak & ETA juga
+        }
     }, 10000);
 }
 

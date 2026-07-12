@@ -135,7 +135,8 @@ class IoTApiController extends Controller
                 'speed_kmh'      => round($data['speed_kmh']),
                 'heading'        => $data['heading'] ?? null,
                 'updated_at'     => now()->toISOString(),
-            ]))->toOthers();
+            ]));
+
         }
 
         // 2. Broadcast fleet summary
@@ -147,7 +148,8 @@ class IoTApiController extends Controller
                 'offline'        => $summary->offline ?? 0,
                 'total_vehicles' => $summary->total_vehicles ?? 0,
                 'online'         => $summary->online ?? 0,
-            ]))->toOthers();
+            ]));
+
         }
 
         // 3. Broadcast trip status jika ada
@@ -159,7 +161,8 @@ class IoTApiController extends Controller
                 'current_lat'  => $data['latitude'],
                 'current_lng'  => $data['longitude'],
                 'current_speed'=> round($data['speed_kmh']),
-            ]))->toOthers();
+            ]));
+
         }
     }
 
