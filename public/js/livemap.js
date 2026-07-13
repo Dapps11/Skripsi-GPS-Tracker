@@ -721,13 +721,18 @@ let lastTrackLen = gpsPoints.length; // satu deklarasi saja
 async function updateTrackFromServer(rtLat, rtLng) {
     if (!activeTrip) return;
     try {
-        const data = await (await fetch(`/api/internal/trip/${activeTrip.vehicle_id}?t=${Date.now()}`)).json();
+        const res = await fetch(`/api/internal/trip/${activeTrip.vehicle_id}?t=${Date.now()}`, {
+            credentials: 'same-origin'
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        
         if (data.gps_track) {
-            // Append the real-time marker location so the track perfectly connects to the moving truck
+            // Force push real-time marker location so the track connects to the moving truck
             if (rtLat && rtLng) {
-                const last = data.gps_track[data.gps_track.length - 1];
-                // Only append if it differs from the last DB point to avoid zero-length line segments
-                if (!last || last.latitude != rtLat || last.longitude != rtLng) {
+                const last = data.gps_track.length > 0 ? data.gps_track[data.gps_track.length - 1] : null;
+                // If the backend last point is different from real-time, append it
+                if (!last || String(last.latitude) !== String(rtLat) || String(last.longitude) !== String(rtLng)) {
                     data.gps_track.push({
                         latitude: rtLat,
                         longitude: rtLng
@@ -739,7 +744,9 @@ async function updateTrackFromServer(rtLat, rtLng) {
             if (MAP_TYPE === 'osm')                drawOSMTrack(data.gps_track);
             if (MAP_TYPE === 'gmaps' && gMapReady) drawGoogleTrack(data.gps_track);
         }
-    } catch(e) {}
+    } catch(e) {
+        console.error('Failed to update track from server:', e);
+    }
 }
 
 // ════════════════════════════════════════════════════════════════
