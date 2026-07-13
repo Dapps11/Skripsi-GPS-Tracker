@@ -69,9 +69,11 @@ class LiveMapController extends Controller
         $gpsQuery = DB::table('gps_telemetry')->where('vehicle_id', $vehicle->id);
 
         if ($relevantTrip && $relevantTrip->departed_at) {
-            $gpsQuery->where('gps_timestamp', '>=', $relevantTrip->departed_at);
+            $departedUtcStr = \Carbon\Carbon::parse($relevantTrip->departed_at, 'Asia/Jakarta')->utc()->toDateTimeString();
+            $gpsQuery->where('gps_timestamp', '>=', $departedUtcStr);
             if ($relevantTrip->arrived_at) {
-                $gpsQuery->where('gps_timestamp', '<=', $relevantTrip->arrived_at);
+                $arrivedUtcStr = \Carbon\Carbon::parse($relevantTrip->arrived_at, 'Asia/Jakarta')->utc()->toDateTimeString();
+                $gpsQuery->where('gps_timestamp', '<=', $arrivedUtcStr);
             }
         } else {
             // Belum ada trip yang berangkat — tampilkan saja posisi 24 jam terakhir
@@ -80,6 +82,10 @@ class LiveMapController extends Controller
 
         $gpsPoints = $gpsQuery->orderBy('gps_timestamp')
                        ->get(['latitude', 'longitude', 'speed_kmh', 'gps_timestamp']);
+
+        if ($relevantTrip && $gpsPoints->isNotEmpty()) {
+            $relevantTrip->current_speed_kmh = $gpsPoints->last()->speed_kmh;
+        }
 
         $latestDriverStatus = DB::table('driver_monitoring_events')
                                 ->where('vehicle_id', $vehicle->id)
