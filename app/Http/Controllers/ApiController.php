@@ -120,15 +120,15 @@ class ApiController extends Controller
             $realtimeMin = (int) round(($distRoad / $speed) * 60 + $delay);
 
             // ── ETA real-time Google dengan traffic ───────────────────
-            $realtimeGoogle = $this->fetchGoogleETAWithTraffic(
-                $curLat, $curLng, $destLat, $destLng
-            );
+            // Dipindahkan sepenuhnya ke frontend (Javascript) karena 
+            // API key Google Maps biasanya memiliki HTTP Referer restriction
+            // sehingga request dari backend (PHP) akan selalu ditolak (REQUEST_DENIED).
+            $realtimeGoogle = null;
 
             $distM = round($distNow * 1000, 0);
 
             // ── Catat snapshot ETA buat analisis akurasi nanti ────────
             $this->logEtaSnapshot($trip->id, 'realtime_haversine', $realtimeMin);
-            $this->logEtaSnapshot($trip->id, 'realtime_google_traffic', $realtimeGoogle);
         }
 
         // ── ETA initial haversine ────────────────────────────────────

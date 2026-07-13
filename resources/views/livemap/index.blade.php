@@ -225,7 +225,7 @@
                                 </svg>
                             </div>
                             <div>
-                                <span style="font-size:13px;color:#374151;">Real-time ({{ $mapType === 'gmaps' ? 'Google' : 'OSRM' }})</span>
+                                <span style="font-size:13px;color:#374151;">Real-time ({{ ($mapType === 'gmaps' || !empty($gmapsKey)) ? 'Google' : 'OSRM' }})</span>
                                 <div style="font-size:9px;color:#9ca3af;">Via routing API</div>
                             </div>
                         </div>
@@ -263,7 +263,7 @@
                                 </svg>
                             </div>
                             <div>
-                                <span style="font-size:13px;color:#374151;">Awal ({{ $mapType === 'gmaps' ? 'Google' : 'OSRM' }})</span>
+                                <span style="font-size:13px;color:#374151;">Awal ({{ ($mapType === 'gmaps' || !empty($gmapsKey)) ? 'Google' : 'OSRM' }})</span>
                                 <div style="font-size:9px;color:#9ca3af;">Dari titik keberangkatan</div>
                             </div>
                         </div>

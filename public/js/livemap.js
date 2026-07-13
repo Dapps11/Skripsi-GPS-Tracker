@@ -587,7 +587,9 @@ function drawGoogleTrackViaDirections(points) {
 // ETA — API OSRM / Google
 // ════════════════════════════════════════════════════════════════
 async function fetchAPIeta(lat1, lng1, lat2, lng2) {
-    if (MAP_TYPE === 'gmaps' && window.google) return fetchGoogleETA(lat1, lng1, lat2, lng2);
+    // Selalu gunakan Google Maps untuk ETA jika API key-nya dimuat di halaman (window.google tersedia),
+    // meskipun tipe petanya adalah OSM. OSRM hanya dipakai jika benar-benar tidak ada Google Maps.
+    if (window.google && window.google.maps) return fetchGoogleETA(lat1, lng1, lat2, lng2);
     return fetchOSRMeta(lat1, lng1, lat2, lng2);
 }
 
@@ -665,8 +667,11 @@ async function fetchInitialAPIeta() {
 async function pollAPIeta() {
     if (!activeTrip) return;
     try {
-        let data = await fetch(`/api/internal/trip/${activeTrip.vehicle_id}`)
-                         .then(r => r.json());
+        const res = await fetch(`/api/internal/trip/${activeTrip.vehicle_id}`, {
+            credentials: 'same-origin'
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        let data = await res.json();
 
         if (!data?.trip?.current_lat) {
             // Fallback ke GPS point terakhir yang sudah ada di halaman
@@ -867,7 +872,9 @@ let positionTimer  = null;
 // ════════════════════════════════════════════════════════════════
 async function pollVehiclePositions() {
     try {
-        const vehicles = await fetch('/api/internal/vehicles-position').then(r => r.json());
+        const res = await fetch('/api/internal/vehicles-position', { credentials: 'same-origin' });
+        if (!res.ok) return;
+        const vehicles = await res.json();
         if (!Array.isArray(vehicles)) return;
 
         vehicles.forEach(v => {
