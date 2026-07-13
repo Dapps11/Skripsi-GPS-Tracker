@@ -901,10 +901,10 @@ if (MAP_TYPE === 'gmaps') {
     initOSM();
 }
 
-// ── Vehicle positions polling — SELALU jalan (tiap 10 detik) ─────
+// ── Vehicle positions polling — SELALU jalan (tiap 5 detik) ─────
 // Ini memastikan marker di peta selalu update meskipun WS tidak konek.
 pollVehiclePositions();
-positionTimer = setInterval(pollVehiclePositions, 10000);
+positionTimer = setInterval(pollVehiclePositions, 5000);
 
 if (activeTrip) {
     // ── Isi panel langsung dari gpsPoints yang sudah ada di halaman ──
