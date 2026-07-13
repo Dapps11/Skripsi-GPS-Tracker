@@ -162,13 +162,22 @@ function initOSM() {
     }
 
     (async () => {
+        let rc = null;
         if (activeTrip && activeTrip.origin_lat) {
             const oLat = +activeTrip.origin_lat, oLng = +activeTrip.origin_lng;
             const dLat = +activeTrip.dest_lat,   dLng = +activeTrip.dest_lng;
-            const rc = await drawOSMRoute(oLat, oLng, dLat, dLng);
+            rc = await drawOSMRoute(oLat, oLng, dLat, dLng);
             drawOSMHaversine(oLat, oLng, dLat, dLng);
             if (gpsPoints.length >= 2) drawOSMTrack(gpsPoints);
-            if (rc && rc.length) osmMap.fitBounds(rc, { padding:[80, 420] });
+        }
+
+        const selVid = window.__livemap?.selectedVehicleId;
+        const selV = selVid ? allVehicles.find(v => String(v.vehicle_id) === String(selVid)) : null;
+
+        if (selV && selV.latitude && selV.longitude) {
+            osmMap.fitBounds([[+selV.latitude, +selV.longitude], [+selV.latitude, +selV.longitude]], { paddingBottomRight: [400, 0], maxZoom: 16 });
+        } else if (rc && rc.length) {
+            osmMap.fitBounds(rc, { padding:[80, 420] });
         } else {
             const coords = allVehicles.filter(v => v.latitude && v.longitude).map(v => [+v.latitude, +v.longitude]);
             if (coords.length) osmMap.fitBounds(coords, { padding:[60, 340] });
@@ -375,19 +384,28 @@ window.onLiveGmapReady = function () {
             );
         }
         if (gpsPoints.length >= 2) drawGoogleTrack(gpsPoints);
-        if (activeTrip.origin_lat) {
-            const bounds = new google.maps.LatLngBounds();
-            bounds.extend({ lat: +activeTrip.origin_lat, lng: +activeTrip.origin_lng });
-            bounds.extend({ lat: +activeTrip.dest_lat,   lng: +activeTrip.dest_lng });
-            gpsPoints.forEach(p => bounds.extend({ lat: +p.latitude, lng: +p.longitude }));
-            gMap.fitBounds(bounds, 80);
-        }
+    }
+
+    const selVid = window.__livemap?.selectedVehicleId;
+    const selV = selVid ? allVehicles.find(v => String(v.vehicle_id) === String(selVid)) : null;
+
+    if (selV && selV.latitude && selV.longitude) {
+        gMap.setZoom(16);
+        gMap.panTo({ lat: +selV.latitude, lng: +selV.longitude });
+        // Shift map camera right so the marker appears on the left to accommodate the right panel
+        setTimeout(() => gMap.panBy(200, 0), 100);
+    } else if (activeTrip && activeTrip.origin_lat) {
+        const bounds = new google.maps.LatLngBounds();
+        bounds.extend({ lat: +activeTrip.origin_lat, lng: +activeTrip.origin_lng });
+        bounds.extend({ lat: +activeTrip.dest_lat,   lng: +activeTrip.dest_lng });
+        gpsPoints.forEach(p => bounds.extend({ lat: +p.latitude, lng: +p.longitude }));
+        gMap.fitBounds(bounds, { left:80, right:420, top:80, bottom:80 });
     } else {
         const vp = allVehicles.filter(v => v.latitude && v.longitude);
         if (vp.length) {
             const b = new google.maps.LatLngBounds();
             vp.forEach(v => b.extend({ lat: +v.latitude, lng: +v.longitude }));
-            gMap.fitBounds(b, 60);
+            gMap.fitBounds(b, { left:60, right:340, top:60, bottom:60 });
         }
     }
 };
