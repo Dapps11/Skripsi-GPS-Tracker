@@ -718,11 +718,23 @@ async function pollAPIeta() {
 // ════════════════════════════════════════════════════════════════
 let lastTrackLen = gpsPoints.length; // satu deklarasi saja
 
-async function updateTrackFromServer() {
+async function updateTrackFromServer(rtLat, rtLng) {
     if (!activeTrip) return;
     try {
         const data = await (await fetch(`/api/internal/trip/${activeTrip.vehicle_id}?t=${Date.now()}`)).json();
-        if (data.gps_track && data.gps_track.length > lastTrackLen) {
+        if (data.gps_track) {
+            // Append the real-time marker location so the track perfectly connects to the moving truck
+            if (rtLat && rtLng) {
+                const last = data.gps_track[data.gps_track.length - 1];
+                // Only append if it differs from the last DB point to avoid zero-length line segments
+                if (!last || last.latitude != rtLat || last.longitude != rtLng) {
+                    data.gps_track.push({
+                        latitude: rtLat,
+                        longitude: rtLng
+                    });
+                }
+            }
+
             lastTrackLen = data.gps_track.length;
             if (MAP_TYPE === 'osm')                drawOSMTrack(data.gps_track);
             if (MAP_TYPE === 'gmaps' && gMapReady) drawGoogleTrack(data.gps_track);
@@ -810,7 +822,7 @@ window.updateLivemapPanel = function(data) {
     }
 
     // Update GPS track
-    updateTrackFromServer();
+    updateTrackFromServer(data.latitude, data.longitude);
 };
 
 window.handleTripUpdate = function(data) {
