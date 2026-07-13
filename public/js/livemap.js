@@ -175,7 +175,10 @@ function initOSM() {
         const selV = selVid ? allVehicles.find(v => String(v.vehicle_id) === String(selVid)) : null;
 
         if (selV && selV.latitude && selV.longitude) {
-            osmMap.fitBounds([[+selV.latitude, +selV.longitude], [+selV.latitude, +selV.longitude]], { paddingBottomRight: [400, 0], maxZoom: 16 });
+            osmMap.setView([+selV.latitude, +selV.longitude], 16);
+            setTimeout(() => {
+                if (osmMap) osmMap.panBy([200, 0], { animate: true, duration: 0.5 });
+            }, 300);
         } else if (rc && rc.length) {
             osmMap.fitBounds(rc, { padding:[80, 420] });
         } else {
@@ -718,7 +721,7 @@ let lastTrackLen = gpsPoints.length; // satu deklarasi saja
 async function updateTrackFromServer() {
     if (!activeTrip) return;
     try {
-        const data = await (await fetch(`/api/internal/trip/${activeTrip.vehicle_id}`)).json();
+        const data = await (await fetch(`/api/internal/trip/${activeTrip.vehicle_id}?t=${Date.now()}`)).json();
         if (data.gps_track && data.gps_track.length > lastTrackLen) {
             lastTrackLen = data.gps_track.length;
             if (MAP_TYPE === 'osm')                drawOSMTrack(data.gps_track);
@@ -768,6 +771,18 @@ window.updateLivemapPanel = function(data) {
                             (window.__livemap && window.__livemap.selectedVehicleId && String(window.__livemap.selectedVehicleId) === String(data.vehicle_id));
 
     if (!isTargetVehicle) return;
+
+    // AUTO PAN to follow vehicle
+    if (data.latitude && data.longitude) {
+        if (MAP_TYPE === 'osm' && typeof osmMap !== 'undefined' && osmMap) {
+            const z = osmMap.getZoom();
+            const targetPt = osmMap.project([+data.latitude, +data.longitude], z).add([160, 0]);
+            osmMap.panTo(osmMap.unproject(targetPt, z), { animate: true });
+        } else if (MAP_TYPE === 'gmaps' && typeof gMap !== 'undefined' && gMap) {
+            gMap.panTo({ lat: +data.latitude, lng: +data.longitude });
+            gMap.panBy(200, 0);
+        }
+    }
 
     // Speed - active trip
     const spEl = document.getElementById('live-speed');
