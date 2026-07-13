@@ -198,10 +198,14 @@ function drawOSMTrack(points) {
     osmTrackLayers.forEach(l => osmMap.removeLayer(l));
     osmTrackLayers = [];
     const coords = points.map(p => [+p.latitude, +p.longitude]);
-    osmTrackLayers.push(
-        L.polyline(coords, { color:'#fb923c', weight:10, opacity:.18, lineCap:'round', lineJoin:'round' }).addTo(osmMap),
-        L.polyline(coords, { color:'#f97316', weight:4.5, opacity:.9,  lineCap:'round', lineJoin:'round' }).addTo(osmMap)
-    );
+    const shadow = L.polyline(coords, { color:'#fb923c', weight:10, opacity:.18, lineCap:'round', lineJoin:'round' }).addTo(osmMap);
+    const main = L.polyline(coords, { color:'#f97316', weight:4.5, opacity:.9,  lineCap:'round', lineJoin:'round' }).addTo(osmMap);
+    
+    osmTrackLayers.push(shadow, main);
+    
+    // Ensure track is always on top
+    if (shadow.bringToFront) shadow.bringToFront();
+    if (main.bringToFront) main.bringToFront();
 }
 
 async function drawOSMRoute(oLat, oLng, dLat, dLng) {
@@ -226,11 +230,15 @@ async function drawOSMRoute(oLat, oLng, dLat, dLng) {
         if (osmRouteMain)   osmMap.removeLayer(osmRouteMain);
         osmRouteShadow = L.polyline(coords, { color:'#818cf8', weight:10, opacity:.2,  lineCap:'round', lineJoin:'round' }).addTo(osmMap);
         osmRouteMain   = L.polyline(coords, { color:'#4f46e5', weight:5,  opacity:.88, lineCap:'round', lineJoin:'round' }).addTo(osmMap);
+        
+        if (osmRouteShadow.bringToBack) osmRouteShadow.bringToBack();
+        if (osmRouteMain.bringToBack) osmRouteMain.bringToBack();
         return coords;
     } catch(e) {
         if (!activeTrip) return null;
         const coords = [[+activeTrip.origin_lat, +activeTrip.origin_lng], [+activeTrip.dest_lat, +activeTrip.dest_lng]];
         osmRouteMain = L.polyline(coords, { color:'#4f46e5', weight:4, opacity:.6, dashArray:'10,7' }).addTo(osmMap);
+        if (osmRouteMain.bringToBack) osmRouteMain.bringToBack();
         return coords;
     }
 }
@@ -509,8 +517,8 @@ async function drawGoogleTrack(points) {
         }
         if (allSnapped.length < 2) throw new Error('No snapped points');
         gTrackLines.push(
-            new google.maps.Polyline({ path:allSnapped, map:gMap, strokeColor:'#fb923c', strokeOpacity:.2,  strokeWeight:10, zIndex:1 }),
-            new google.maps.Polyline({ path:allSnapped, map:gMap, strokeColor:'#f97316', strokeOpacity:.9, strokeWeight:4.5, zIndex:2 })
+            new google.maps.Polyline({ path:allSnapped, map:gMap, strokeColor:'#fb923c', strokeOpacity:.2,  strokeWeight:10, zIndex:10 }),
+            new google.maps.Polyline({ path:allSnapped, map:gMap, strokeColor:'#f97316', strokeOpacity:.9, strokeWeight:4.5, zIndex:11 })
         );
     } catch(e) {
         console.warn('Roads API gagal, fallback:', e.message);
@@ -541,14 +549,14 @@ function drawGoogleTrackViaDirections(points) {
                 });
             });
             gTrackLines.push(
-                new google.maps.Polyline({ path, map:gMap, strokeColor:'#fb923c', strokeOpacity:.2,  strokeWeight:10, zIndex:1 }),
-                new google.maps.Polyline({ path, map:gMap, strokeColor:'#f97316', strokeOpacity:.9, strokeWeight:4.5, zIndex:2 })
+                new google.maps.Polyline({ path, map:gMap, strokeColor:'#fb923c', strokeOpacity:.2,  strokeWeight:10, zIndex:10 }),
+                new google.maps.Polyline({ path, map:gMap, strokeColor:'#f97316', strokeOpacity:.9, strokeWeight:4.5, zIndex:11 })
             );
         } else {
             const coords = points.map(p => ({ lat:+p.latitude, lng:+p.longitude }));
             gTrackLines.push(
-                new google.maps.Polyline({ path:coords, map:gMap, strokeColor:'#fb923c', strokeOpacity:.2, strokeWeight:10, zIndex:1 }),
-                new google.maps.Polyline({ path:coords, map:gMap, strokeColor:'#f97316', strokeOpacity:.9, strokeWeight:4.5, zIndex:2 })
+                new google.maps.Polyline({ path:coords, map:gMap, strokeColor:'#fb923c', strokeOpacity:.2, strokeWeight:10, zIndex:10 }),
+                new google.maps.Polyline({ path:coords, map:gMap, strokeColor:'#f97316', strokeOpacity:.9, strokeWeight:4.5, zIndex:11 })
             );
         }
     });
@@ -738,14 +746,21 @@ window.updateLivemapMarker = function(data) {
 };
 
 window.updateLivemapPanel = function(data) {
-    if (!activeTrip || String(activeTrip.vehicle_id) !== String(data.vehicle_id)) return;
+    const isTargetVehicle = (activeTrip && String(activeTrip.vehicle_id) === String(data.vehicle_id)) ||
+                            (window.__livemap && window.__livemap.selectedVehicleId && String(window.__livemap.selectedVehicleId) === String(data.vehicle_id));
 
-    // Speed
+    if (!isTargetVehicle) return;
+
+    // Speed - active trip
     const spEl = document.getElementById('live-speed');
     if (spEl) spEl.textContent = Math.round(data.speed_kmh || 0);
 
-    // Sisa jarak
-    if (data.latitude && data.longitude) {
+    // Speed - moving without trip
+    const spElMoving = document.getElementById('live-speed-moving');
+    if (spElMoving) spElMoving.textContent = Math.round(data.speed_kmh || 0);
+
+    // Sisa jarak (only for active trip)
+    if (activeTrip && data.latitude && data.longitude) {
         const lat     = +data.latitude, lng = +data.longitude;
         const destLat = +activeTrip.dest_lat, destLng = +activeTrip.dest_lng;
         const distKm  = haversineJS(lat, lng, destLat, destLng);
@@ -795,7 +810,18 @@ async function pollVehiclePositions() {
             const lat = +v.latitude, lng = +v.longitude;
             const status = v.vehicle_status || 'offline';
             const speed  = v.speed_kmh || 0;
-            const isActive = activeTrip && String(activeTrip.vehicle_id) === vid;
+            const isActive = (activeTrip && String(activeTrip.vehicle_id) === vid) || 
+                             (window.__livemap && window.__livemap.selectedVehicleId && String(window.__livemap.selectedVehicleId) === vid);
+
+            // Update panel sinkron dengan pergerakan marker (fallback jika WS mati)
+            if (isActive && typeof window.updateLivemapPanel === 'function') {
+                window.updateLivemapPanel({
+                    vehicle_id: v.vehicle_id,
+                    latitude: v.latitude,
+                    longitude: v.longitude,
+                    speed_kmh: v.speed_kmh
+                });
+            }
 
             // Update OSM markers
             if (osmMarkers[vid]) {

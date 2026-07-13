@@ -344,6 +344,119 @@
         </div>
     </div>
 
+    @elseif(isset($vehicle) && $vehicle && $vehicle->status === 'moving' && !isset($trip))
+    {{-- ── PANEL: VEHICLE DIPILIH — BERGERAK TANPA TRIP AKTIF ── --}}
+    <div class="detail-panel" id="detail-panel" style="width:320px;">
+        <div class="mini-card" id="mini-card" onclick="expandPanel()">
+            <div style="width:44px;height:44px;background:#3b82f6;border-radius:14px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(59,130,246,.4);">
+                <svg style="width:22px;height:22px;" fill="none" viewBox="0 0 24 24" stroke="white" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                </svg>
+            </div>
+        </div>
+        <div class="panel-content" id="panel-content">
+            {{-- Header --}}
+            <div style="padding:1rem 1.25rem .875rem;border-bottom:1px solid #f3f4f6;flex-shrink:0;">
+                <div style="display:flex;align-items:flex-start;justify-content:space-between;gap:8px;">
+                    <div style="min-width:0;flex:1;">
+                        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap;">
+                            <span style="padding:2px 10px;font-size:10px;font-weight:700;border-radius:9999px;text-transform:uppercase;letter-spacing:.05em;background:#dcfce7;color:#15803d">
+                                MOVING
+                            </span>
+                            <span style="font-size:15px;font-weight:800;color:#111827;">{{ $vehicle->name }}</span>
+                        </div>
+                        <div style="font-size:11px;color:#9ca3af;">{{ $vehicle->license_plate }} · Tidak ada trip aktif</div>
+                    </div>
+                    <div style="display:flex;gap:4px;flex-shrink:0;">
+                        <button onclick="event.stopPropagation();minimizePanel();"
+                                style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;border:none;background:transparent;border-radius:8px;cursor:pointer;color:#9ca3af;"
+                                onmouseover="this.style.background='#f3f4f6'" onmouseout="this.style.background='transparent'">
+                            <svg style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 5l7 7-7 7"/>
+                            </svg>
+                        </button>
+                        <a href="{{ route('livemap.index') }}"
+                           style="width:30px;height:30px;display:flex;align-items:center;justify-content:center;border-radius:8px;color:#9ca3af;text-decoration:none;"
+                           onmouseover="this.style.background='#fee2e2';this.style.color='#ef4444'"
+                           onmouseout="this.style.background='transparent';this.style.color='#9ca3af'">
+                            <svg style="width:16px;height:16px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12"/>
+                            </svg>
+                        </a>
+                    </div>
+                </div>
+            </div>
+
+            <div class="panel-body">
+                <div style="margin-bottom:16px;">
+                    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px;">
+                        <div style="width:7px;height:7px;background:#22c55e;border-radius:50%;animation:pulse 2s infinite;"></div>
+                        <span style="font-size:10px;font-weight:700;color:#9ca3af;text-transform:uppercase;letter-spacing:.08em;">Real-Time IoT Status</span>
+                    </div>
+
+                    {{-- Speed --}}
+                    <div class="irow">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="width:36px;height:36px;background:#eff6ff;border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                                <svg style="width:18px;height:18px;" fill="none" viewBox="0 0 24 24" stroke="#3b82f6" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+                                </svg>
+                            </div>
+                            <span style="font-size:13px;color:#374151;">Kecepatan Sekarang</span>
+                        </div>
+                        <span style="font-size:14px;font-weight:800;color:#111827;">
+                            <span id="live-speed-moving">{{ (int) round($vehicle->speed_kmh ?? ($gpsPoints->last()->speed_kmh ?? 0)) }}</span>
+                            <span style="font-size:12px;font-weight:400;color:#9ca3af;"> km/h</span>
+                        </span>
+                    </div>
+
+                    {{-- Driver Status --}}
+                    @php
+                        $ds = 'normal';
+                        if (isset($latestDriverStatus)) {
+                            if ($latestDriverStatus->is_alarm) $ds = 'danger';
+                            elseif ($latestDriverStatus->event_type === 'drowsy') $ds = 'warning';
+                        }
+                        $dsStyle = $ds === 'normal' ? 'background:#dcfce7;color:#15803d' : ($ds === 'warning' ? 'background:#fef08a;color:#a16207' : 'background:#fee2e2;color:#b91c1c');
+                    @endphp
+                    <div class="irow">
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <div style="width:36px;height:36px;background:#f0fdf4;border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                                <svg style="width:18px;height:18px;" fill="none" viewBox="0 0 24 24" stroke="#22c55e" stroke-width="2">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                                </svg>
+                            </div>
+                            <span style="font-size:13px;color:#374151;">Driver Status</span>
+                        </div>
+                        <span id="ds-badge-moving" style="padding:4px 12px;border-radius:9999px;font-size:11px;font-weight:700;{{ $dsStyle }}">
+                            {{ strtoupper($ds) }}
+                        </span>
+                    </div>
+                </div>
+
+                @if($ds !== 'normal')
+                <div style="padding:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;display:flex;gap:10px;margin-bottom:16px;">
+                    <svg style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" fill="none" viewBox="0 0 24 24" stroke="#f97316" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <span style="font-size:12px;color:#c2410c;line-height:1.5;">System detected drowsy behavior. Monitoring closely.</span>
+                </div>
+                @endif
+
+                <div style="display:flex;flex-direction:column;gap:8px;">
+                    <a href="{{ route('trips.create', ['vehicle_id' => $vehicle->id]) }}"
+                       style="display:flex;align-items:center;justify-content:center;gap:6px;padding:11px 8px;background:#22c55e;color:white;border-radius:12px;font-size:12px;font-weight:700;text-decoration:none;"
+                       onmouseover="this.style.background='#16a34a'" onmouseout="this.style.background='#22c55e'">
+                        <svg style="width:15px;height:15px;" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 4v16m8-8H4"/>
+                        </svg>
+                        Buat Trip Baru
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
     @elseif(isset($vehicle) && $vehicle && isset($lastTrip) && $lastTrip)
     {{-- ── PANEL: VEHICLE DIPILIH — ADA TRIP TERAKHIR ── --}}
     <div class="detail-panel" id="detail-panel" style="width:320px;">
@@ -630,6 +743,7 @@ window.__livemap = {
     gpsPoints:   @json($gpsPoints ?? []),
     activeTrip:  @json($trip ?? null),
     hasTrip:     {{ isset($trip) && $trip ? 'true' : 'false' }},
+    selectedVehicleId: "{{ $vehicle->id ?? '' }}",
 };
 </script>
 <script src="{{ asset('js/livemap.js') }}"></script>
