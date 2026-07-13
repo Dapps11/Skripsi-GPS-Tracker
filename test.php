@@ -4,6 +4,9 @@ $app = require_once 'bootstrap/app.php';
 $kernel = $app->make(Illuminate\Contracts\Console\Kernel::class);
 $kernel->bootstrap();
 
+$tp = DB::table('gps_telemetry')->limit(10)->get();
+echo count($tp);
+
 $key = env('GOOGLE_MAPS_API_KEY');
 $url = "https://maps.googleapis.com/maps/api/directions/json?origin=-7.9405406,112.6914971&destination=-7.9527353,112.6900456&departure_time=now&key={$key}";
 $res = Illuminate\Support\Facades\Http::timeout(5)->get($url);

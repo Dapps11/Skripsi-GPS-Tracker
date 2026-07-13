@@ -222,22 +222,36 @@ function drawOSMTrack(points) {
 
 async function drawOSMRoute(oLat, oLng, dLat, dLng) {
     try {
-        let osrmCoords;
+        let coords = null;
+        
+        // Coba rute dengan waypoint strategis
         if (gpsPoints && gpsPoints.length >= 10) {
-            const strategic = getStrategicWaypoints(gpsPoints, 3);
-            osrmCoords = [
-                `${oLng},${oLat}`,
-                ...strategic.map(p => `${+p.longitude},${+p.latitude}`),
-                `${dLng},${dLat}`
-            ].join(';');
-        } else {
-            osrmCoords = `${oLng},${oLat};${dLng},${dLat}`;
+            try {
+                const strategic = getStrategicWaypoints(gpsPoints, 3);
+                const osrmCoords = [
+                    `${oLng},${oLat}`,
+                    ...strategic.map(p => `${+p.longitude},${+p.latitude}`),
+                    `${dLng},${dLat}`
+                ].join(';');
+                const url = `https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`;
+                const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+                const data = await res.json();
+                if (data.code === 'Ok' && data.routes.length) {
+                    coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+                }
+            } catch(e) { console.warn('OSRM with waypoints failed, falling back to direct route'); }
         }
 
-        const res  = await fetch(`https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`, { signal: AbortSignal.timeout(8000) });
-        const data = await res.json();
-        if (data.code !== 'Ok' || !data.routes.length) throw new Error('no route');
-        const coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+        // Fallback: Rute langsung dari Origin ke Dest (mengabaikan waypoints) jika gagal
+        if (!coords) {
+            const osrmCoords = `${oLng},${oLat};${dLng},${dLat}`;
+            const url = `https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`;
+            const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+            const data = await res.json();
+            if (data.code !== 'Ok' || !data.routes.length) throw new Error('no route');
+            coords = data.routes[0].geometry.coordinates.map(c => [c[1], c[0]]);
+        }
+
         if (osmRouteShadow) osmMap.removeLayer(osmRouteShadow);
         if (osmRouteMain)   osmMap.removeLayer(osmRouteMain);
         osmRouteShadow = L.polyline(coords, { color:'#818cf8', weight:10, opacity:.2,  lineCap:'round', lineJoin:'round' }).addTo(osmMap);
@@ -249,6 +263,8 @@ async function drawOSMRoute(oLat, oLng, dLat, dLng) {
     } catch(e) {
         if (!activeTrip) return null;
         const coords = [[+activeTrip.origin_lat, +activeTrip.origin_lng], [+activeTrip.dest_lat, +activeTrip.dest_lng]];
+        if (osmRouteShadow) osmMap.removeLayer(osmRouteShadow);
+        if (osmRouteMain)   osmMap.removeLayer(osmRouteMain);
         osmRouteMain = L.polyline(coords, { color:'#4f46e5', weight:4, opacity:.6, dashArray:'10,7' }).addTo(osmMap);
         if (osmRouteMain.bringToBack) osmRouteMain.bringToBack();
         return coords;
@@ -417,39 +433,48 @@ async function drawGoogleRoute() {
     if (!gMap || !activeTrip) return;
 
     try {
-        let osrmCoords;
+        let path = null;
+        
+        // Coba rute dengan waypoint strategis
         if (gpsPoints && gpsPoints.length >= 10) {
-            const strategic = getStrategicWaypoints(gpsPoints, 3);
-            osrmCoords = [
-                `${+activeTrip.origin_lng},${+activeTrip.origin_lat}`,
-                ...strategic.map(p => `${+p.longitude},${+p.latitude}`),
-                `${+activeTrip.dest_lng},${+activeTrip.dest_lat}`
-            ].join(';');
-        } else {
-            osrmCoords = `${+activeTrip.origin_lng},${+activeTrip.origin_lat};${+activeTrip.dest_lng},${+activeTrip.dest_lat}`;
+            try {
+                const strategic = getStrategicWaypoints(gpsPoints, 3);
+                const osrmCoords = [
+                    `${+activeTrip.origin_lng},${+activeTrip.origin_lat}`,
+                    ...strategic.map(p => `${+p.longitude},${+p.latitude}`),
+                    `${+activeTrip.dest_lng},${+activeTrip.dest_lat}`
+                ].join(';');
+                const url = `https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`;
+                const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+                const data = await res.json();
+                if (data.code === 'Ok' && data.routes.length) {
+                    path = data.routes[0].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
+                }
+            } catch(e) { console.warn('Google route with waypoints failed, falling back'); }
         }
 
-        const url = `https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`;
-        const res = await fetch(url, { signal: AbortSignal.timeout(8000) });
-        const data = await res.json();
-
-        if (data.code === 'Ok' && data.routes.length) {
-            // OSRM [lng, lat] -> Google {lat, lng}
-            const path = data.routes[0].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
-            
-            // Shadow biru
-            new google.maps.Polyline({
-                path, map: gMap,
-                strokeColor: '#818cf8', strokeOpacity: 0.2, strokeWeight: 10,
-                zIndex: 1,
-            });
-            // Garis biru utama
-            new google.maps.Polyline({
-                path, map: gMap,
-                strokeColor: '#4f46e5', strokeOpacity: 0.88, strokeWeight: 5,
-                zIndex: 2,
-            });
+        // Fallback rute langsung
+        if (!path) {
+            const osrmCoords = `${+activeTrip.origin_lng},${+activeTrip.origin_lat};${+activeTrip.dest_lng},${+activeTrip.dest_lat}`;
+            const url = `https://router.project-osrm.org/route/v1/driving/${osrmCoords}?overview=full&geometries=geojson`;
+            const res = await fetch(url, { signal: AbortSignal.timeout(6000) });
+            const data = await res.json();
+            if (data.code !== 'Ok' || !data.routes.length) throw new Error('no route');
+            path = data.routes[0].geometry.coordinates.map(c => ({ lat: c[1], lng: c[0] }));
         }
+
+        // Shadow biru
+        new google.maps.Polyline({
+            path, map: gMap,
+            strokeColor: '#818cf8', strokeOpacity: 0.2, strokeWeight: 10,
+            zIndex: 1,
+        });
+        // Garis biru utama
+        new google.maps.Polyline({
+            path, map: gMap,
+            strokeColor: '#4f46e5', strokeOpacity: 0.88, strokeWeight: 5,
+            zIndex: 2,
+        });
     } catch(e) {
         // Fallback garis putus-putus
         new google.maps.Polyline({
@@ -776,8 +801,22 @@ async function updateTrackFromServer(rtLat, rtLng) {
         const lastLocal = gpsPoints.length > 0 ? gpsPoints[gpsPoints.length - 1] : null;
         if (!lastLocal || String(lastLocal.latitude) !== String(rtLat) || String(lastLocal.longitude) !== String(rtLng)) {
             gpsPoints.push({ latitude: rtLat, longitude: rtLng });
-            if (MAP_TYPE === 'osm')                drawOSMTrack(gpsPoints);
-            if (MAP_TYPE === 'gmaps' && gMapReady) drawGoogleTrack(gpsPoints);
+            
+            if (MAP_TYPE === 'osm') {
+                drawOSMTrack(gpsPoints);
+            } else if (MAP_TYPE === 'gmaps' && gMapReady) {
+                // Jangan panggil drawGoogleTrack dari awal (spamming API Roads).
+                // Cukup tambahkan titik baru ke polyline yang sudah ada di memori.
+                if (gTrackLines && gTrackLines.length > 0) {
+                    const pt = new google.maps.LatLng(rtLat, rtLng);
+                    gTrackLines.forEach(polyline => {
+                        const path = polyline.getPath();
+                        if (path) path.push(pt);
+                    });
+                } else {
+                    drawGoogleTrack(gpsPoints);
+                }
+            }
         }
     }
 
@@ -798,20 +837,26 @@ async function updateTrackFromServer(rtLat, rtLng) {
         }
 
         if (data.gps_track) {
-            // Sinkronkan riwayat penuh dari server ke variabel lokal
-            gpsPoints.length = 0;
-            data.gps_track.forEach(p => gpsPoints.push(p));
+            // Hanya gambar ulang peta jika server BENAR-BENAR memberikan data GPS yang lebih panjang
+            // Ini mencegah pemanggilan API Google Roads berulang-ulang yang menyebabkan kuota habis (Rate Limit)
+            if (data.gps_track.length > lastTrackLen) {
+                lastTrackLen = data.gps_track.length;
+                
+                // Sinkronkan riwayat penuh dari server ke variabel lokal
+                gpsPoints.length = 0;
+                data.gps_track.forEach(p => gpsPoints.push(p));
 
-            // Pastikan titik real-time terakhir tetap tersambung
-            if (rtLat && rtLng) {
-                const last = gpsPoints.length > 0 ? gpsPoints[gpsPoints.length - 1] : null;
-                if (!last || String(last.latitude) !== String(rtLat) || String(last.longitude) !== String(rtLng)) {
-                    gpsPoints.push({ latitude: rtLat, longitude: rtLng });
+                // Pastikan titik real-time terakhir tetap tersambung
+                if (rtLat && rtLng) {
+                    const last = gpsPoints.length > 0 ? gpsPoints[gpsPoints.length - 1] : null;
+                    if (!last || String(last.latitude) !== String(rtLat) || String(last.longitude) !== String(rtLng)) {
+                        gpsPoints.push({ latitude: rtLat, longitude: rtLng });
+                    }
                 }
-            }
 
-            if (MAP_TYPE === 'osm')                drawOSMTrack(gpsPoints);
-            if (MAP_TYPE === 'gmaps' && gMapReady) drawGoogleTrack(gpsPoints);
+                if (MAP_TYPE === 'osm')                drawOSMTrack(gpsPoints);
+                if (MAP_TYPE === 'gmaps' && gMapReady) drawGoogleTrack(gpsPoints);
+            }
         }
     } catch(e) {
         console.error('Failed to update track from server:', e);
