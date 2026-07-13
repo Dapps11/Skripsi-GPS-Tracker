@@ -289,14 +289,14 @@
                     </div>
                 </div>
 
-                @if($ds !== 'normal')
-                <div style="padding:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;display:flex;gap:10px;margin-bottom:16px;">
+                <div id="ds-warning-box" style="padding:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;display:{{ $ds !== 'normal' ? 'flex' : 'none' }};gap:10px;margin-bottom:16px;">
                     <svg style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" fill="none" viewBox="0 0 24 24" stroke="#f97316" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                     </svg>
-                    <span style="font-size:12px;color:#c2410c;line-height:1.5;">System detected drowsy behavior. Monitoring closely.</span>
+                    <span id="ds-warning-text" style="font-size:12px;color:#c2410c;line-height:1.5;">
+                        {{ $ds === 'danger' ? 'System detected critical alarm. Please contact driver immediately.' : 'System detected drowsy behavior. Monitoring closely.' }}
+                    </span>
                 </div>
-                @endif
 
                 {{-- Buttons --}}
                 <div style="display:flex;flex-direction:column;gap:8px;">
@@ -434,14 +434,14 @@
                     </div>
                 </div>
 
-                @if($ds !== 'normal')
-                <div style="padding:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;display:flex;gap:10px;margin-bottom:16px;">
+                <div id="ds-warning-box-moving" style="padding:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;display:{{ $ds !== 'normal' ? 'flex' : 'none' }};gap:10px;margin-bottom:16px;">
                     <svg style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" fill="none" viewBox="0 0 24 24" stroke="#f97316" stroke-width="2">
                         <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
                     </svg>
-                    <span style="font-size:12px;color:#c2410c;line-height:1.5;">System detected drowsy behavior. Monitoring closely.</span>
+                    <span id="ds-warning-text-moving" style="font-size:12px;color:#c2410c;line-height:1.5;">
+                        {{ $ds === 'danger' ? 'System detected critical alarm. Please contact driver immediately.' : 'System detected drowsy behavior. Monitoring closely.' }}
+                    </span>
                 </div>
-                @endif
 
                 <div style="display:flex;flex-direction:column;gap:8px;">
                     <a href="{{ route('trips.create', ['vehicle_id' => $vehicle->id]) }}"

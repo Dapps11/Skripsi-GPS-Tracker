@@ -663,22 +663,67 @@ async function fetchInitialAPIeta() {
     if (apiEl) apiEl.textContent = etaAPI !== null ? etaAPI : '—';
 }
 
+function updateDriverStatusUI(status) {
+    const ds = status || 'normal';
+    const text = ds.toUpperCase();
+    const style = ds === 'normal' 
+        ? 'background:#dcfce7;color:#15803d' 
+        : (ds === 'warning' ? 'background:#fef08a;color:#a16207' : 'background:#fee2e2;color:#b91c1c');
+    
+    // Update both badges
+    const badge = document.getElementById('ds-badge');
+    const badgeMoving = document.getElementById('ds-badge-moving');
+    if (badge) {
+        badge.textContent = text;
+        badge.style.cssText = `padding:4px 12px;border-radius:9999px;font-size:11px;font-weight:700;${style}`;
+    }
+    if (badgeMoving) {
+        badgeMoving.textContent = text;
+        badgeMoving.style.cssText = `padding:4px 12px;border-radius:9999px;font-size:11px;font-weight:700;${style}`;
+    }
+
+    // Update warning boxes
+    const warnBox = document.getElementById('ds-warning-box');
+    const warnBoxMoving = document.getElementById('ds-warning-box-moving');
+    const warnText = document.getElementById('ds-warning-text');
+    const warnTextMoving = document.getElementById('ds-warning-text-moving');
+    
+    const isNormal = ds === 'normal';
+    const msg = ds === 'danger' ? 'System detected critical alarm. Please contact driver immediately.' : 'System detected drowsy behavior. Monitoring closely.';
+
+    if (warnBox) warnBox.style.display = isNormal ? 'none' : 'flex';
+    if (warnBoxMoving) warnBoxMoving.style.display = isNormal ? 'none' : 'flex';
+    
+    if (warnText) warnText.textContent = msg;
+    if (warnTextMoving) warnTextMoving.textContent = msg;
+}
+
 // ── ETA real-time dari API — dipanggil tiap 30 detik ─────────────
 async function pollAPIeta() {
-    if (!activeTrip) return;
+    const targetVid = activeTrip?.vehicle_id || window.__livemap?.selectedVehicleId;
+    if (!targetVid) return;
+
     try {
-        const res = await fetch(`/api/internal/trip/${activeTrip.vehicle_id}`, {
+        const res = await fetch(`/api/internal/trip/${targetVid}`, {
             credentials: 'same-origin'
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         let data = await res.json();
+        
+        // Update Driver Status Real-time
+        if (data.driver_status) {
+            updateDriverStatusUI(data.driver_status);
+        }
+
+        // ETA calculation only relevant if there's an active trip
+        if (!activeTrip) return;
 
         if (!data?.trip?.current_lat) {
             // Fallback ke GPS point terakhir yang sudah ada di halaman
             if (!gpsPoints.length) return;
             const last = gpsPoints[gpsPoints.length - 1];
             if (!last?.latitude) return;
-            data = { trip: { current_lat: last.latitude, current_lng: last.longitude, current_speed_kmh: last.speed_kmh || 0 } };
+            data.trip = { current_lat: last.latitude, current_lng: last.longitude, current_speed_kmh: last.speed_kmh || 0 };
         }
 
         const lat     = +data.trip.current_lat;
@@ -747,6 +792,11 @@ async function updateTrackFromServer(rtLat, rtLng) {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = await res.json();
         
+        // Pembaruan status pengemudi lebih cepat (setiap 5 detik saat bergerak)
+        if (data.driver_status) {
+            updateDriverStatusUI(data.driver_status);
+        }
+
         if (data.gps_track) {
             // Sinkronkan riwayat penuh dari server ke variabel lokal
             gpsPoints.length = 0;
