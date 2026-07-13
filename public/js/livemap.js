@@ -794,9 +794,11 @@ async function pollAPIeta() {
 let lastTrackLen = gpsPoints.length; // satu deklarasi saja
 
 async function updateTrackFromServer(rtLat, rtLng) {
+    // Jangan gambar/perpanjang garis riwayat jika tidak ada trip aktif (misal: trip sudah selesai)
+    if (!activeTrip) return;
+
     // 1. Pembaruan instan secara visual di sisi klien
-    // Ini memastikan garis orange langsung memanjang saat ikon bergerak,
-    // bahkan untuk kendaraan yang TIDAK memiliki activeTrip.
+    // Ini memastikan garis orange langsung memanjang saat ikon bergerak untuk trip aktif
     if (rtLat && rtLng) {
         const lastLocal = gpsPoints.length > 0 ? gpsPoints[gpsPoints.length - 1] : null;
         if (!lastLocal || String(lastLocal.latitude) !== String(rtLat) || String(lastLocal.longitude) !== String(rtLng)) {
@@ -820,10 +822,7 @@ async function updateTrackFromServer(rtLat, rtLng) {
         }
     }
 
-    // 2. Jika tidak ada trip aktif, pembaruan lokal di atas sudah cukup
-    if (!activeTrip) return;
-
-    // 3. Sinkronisasi penuh dengan database di latar belakang (khusus trip aktif)
+    // 2. Sinkronisasi penuh dengan database di latar belakang
     try {
         const res = await fetch(`/api/internal/trip/${activeTrip.vehicle_id}?t=${Date.now()}`, {
             credentials: 'same-origin'
