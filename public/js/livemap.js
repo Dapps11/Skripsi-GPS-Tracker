@@ -719,7 +719,22 @@ async function pollAPIeta() {
 let lastTrackLen = gpsPoints.length; // satu deklarasi saja
 
 async function updateTrackFromServer(rtLat, rtLng) {
+    // 1. Pembaruan instan secara visual di sisi klien
+    // Ini memastikan garis orange langsung memanjang saat ikon bergerak,
+    // bahkan untuk kendaraan yang TIDAK memiliki activeTrip.
+    if (rtLat && rtLng) {
+        const lastLocal = gpsPoints.length > 0 ? gpsPoints[gpsPoints.length - 1] : null;
+        if (!lastLocal || String(lastLocal.latitude) !== String(rtLat) || String(lastLocal.longitude) !== String(rtLng)) {
+            gpsPoints.push({ latitude: rtLat, longitude: rtLng });
+            if (MAP_TYPE === 'osm')                drawOSMTrack(gpsPoints);
+            if (MAP_TYPE === 'gmaps' && gMapReady) drawGoogleTrack(gpsPoints);
+        }
+    }
+
+    // 2. Jika tidak ada trip aktif, pembaruan lokal di atas sudah cukup
     if (!activeTrip) return;
+
+    // 3. Sinkronisasi penuh dengan database di latar belakang (khusus trip aktif)
     try {
         const res = await fetch(`/api/internal/trip/${activeTrip.vehicle_id}?t=${Date.now()}`, {
             credentials: 'same-origin'
@@ -728,21 +743,20 @@ async function updateTrackFromServer(rtLat, rtLng) {
         const data = await res.json();
         
         if (data.gps_track) {
-            // Force push real-time marker location so the track connects to the moving truck
+            // Sinkronkan riwayat penuh dari server ke variabel lokal
+            gpsPoints.length = 0;
+            data.gps_track.forEach(p => gpsPoints.push(p));
+
+            // Pastikan titik real-time terakhir tetap tersambung
             if (rtLat && rtLng) {
-                const last = data.gps_track.length > 0 ? data.gps_track[data.gps_track.length - 1] : null;
-                // If the backend last point is different from real-time, append it
+                const last = gpsPoints.length > 0 ? gpsPoints[gpsPoints.length - 1] : null;
                 if (!last || String(last.latitude) !== String(rtLat) || String(last.longitude) !== String(rtLng)) {
-                    data.gps_track.push({
-                        latitude: rtLat,
-                        longitude: rtLng
-                    });
+                    gpsPoints.push({ latitude: rtLat, longitude: rtLng });
                 }
             }
 
-            lastTrackLen = data.gps_track.length;
-            if (MAP_TYPE === 'osm')                drawOSMTrack(data.gps_track);
-            if (MAP_TYPE === 'gmaps' && gMapReady) drawGoogleTrack(data.gps_track);
+            if (MAP_TYPE === 'osm')                drawOSMTrack(gpsPoints);
+            if (MAP_TYPE === 'gmaps' && gMapReady) drawGoogleTrack(gpsPoints);
         }
     } catch(e) {
         console.error('Failed to update track from server:', e);
