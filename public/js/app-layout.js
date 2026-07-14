@@ -367,10 +367,14 @@ setInterval(pollUnreadCount, 30000);
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof window.Echo !== 'undefined') {
         window.Echo.channel('fleet-tracking')
-            .listen('.alert.created', () => {
+            .listen('.alert.created', (event) => {
                 pollUnreadCount();
                 if (typeof loadNotifs === 'function' && typeof notifOpen !== 'undefined' && notifOpen) {
                     loadNotifs();
+                }
+                // Langsung trigger update driver status tanpa tunggu polling 30 detik
+                if (typeof pollAPIeta === 'function') {
+                    pollAPIeta();
                 }
             });
     }

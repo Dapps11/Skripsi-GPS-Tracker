@@ -75,10 +75,13 @@ class ApiController extends Controller
                 'current_lng'       => $lastGps?->longitude,
                 'current_speed_kmh' => $currentSpeed,
             ]) : null,
-            'gps_track'     => $gpsTrack,
-            'driver_status' => $driverStatus ?? 'normal',
-            'current_speed' => $currentSpeed,
-            'eta'           => $etaData,
+            'gps_track'          => $gpsTrack,
+            'driver_status'      => $driverStatus ?? 'normal',
+            'current_speed'      => $currentSpeed,
+            'eta'                => $etaData,
+            // DEBUG — hapus setelah masalah driver_status terselesaikan
+            '_debug_monitoring'  => $latestMonitoring,
+            '_debug_vehicle_id'  => $vehicle->id,
         ]);
     }
 

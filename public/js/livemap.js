@@ -831,7 +831,7 @@ async function updateTrackFromServer(rtLat, rtLng) {
         const data = await res.json();
         
         // Pembaruan status pengemudi lebih cepat (setiap 5 detik saat bergerak)
-        if (data.driver_status) {
+        if (data.driver_status !== undefined && data.driver_status !== null) {
             updateDriverStatusUI(data.driver_status);
         }
 
@@ -1071,6 +1071,13 @@ if (activeTrip) {
         updateTrackFromServer();
         pollAPIeta();
     }, 10000);
+
+} else if (window.__livemap?.selectedVehicleId) {
+    // ── Tidak ada trip aktif, tapi vehicle dipilih ──
+    // Tetap polling driver status tiap 10 detik supaya badge langsung update
+    // saat ada event ngantuk/alarm dari device.
+    pollAPIeta(); // panggil sekali saat load
+    apiEtaTimer = setInterval(pollAPIeta, 10000);
 }
 
 window.addEventListener('beforeunload', () => {
