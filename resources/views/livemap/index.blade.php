@@ -593,6 +593,37 @@
                     </div>
                 </div>
 
+                {{-- Driver Status --}}
+                @php
+                    $dsLt = 'normal';
+                    if (isset($latestDriverStatus)) {
+                        if ($latestDriverStatus->is_alarm) $dsLt = 'danger';
+                        elseif (strtolower($latestDriverStatus->event_type ?? '') === 'drowsy') $dsLt = 'warning';
+                    }
+                    $dsLtStyle = $dsLt === 'normal' ? 'background:#dcfce7;color:#15803d' : ($dsLt === 'warning' ? 'background:#fef08a;color:#a16207' : 'background:#fee2e2;color:#b91c1c');
+                @endphp
+                <div class="irow">
+                    <div style="display:flex;align-items:center;gap:10px;">
+                        <div style="width:36px;height:36px;background:#f0fdf4;border-radius:10px;display:flex;align-items:center;justify-content:center;">
+                            <svg style="width:18px;height:18px;" fill="none" viewBox="0 0 24 24" stroke="#22c55e" stroke-width="2">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
+                            </svg>
+                        </div>
+                        <span style="font-size:13px;color:#374151;">Driver Status</span>
+                    </div>
+                    <span id="ds-badge-moving" style="padding:4px 12px;border-radius:9999px;font-size:11px;font-weight:700;{{ $dsLtStyle }}">
+                        {{ strtoupper($dsLt) }}
+                    </span>
+                </div>
+                <div id="ds-warning-box-moving" style="padding:12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:12px;display:{{ $dsLt !== 'normal' ? 'flex' : 'none' }};gap:10px;margin-bottom:14px;">
+                    <svg style="width:16px;height:16px;flex-shrink:0;margin-top:1px;" fill="none" viewBox="0 0 24 24" stroke="#f97316" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                    </svg>
+                    <span id="ds-warning-text-moving" style="font-size:12px;color:#c2410c;line-height:1.5;">
+                        {{ $dsLt === 'danger' ? 'System detected critical alarm. Please contact driver immediately.' : 'System detected drowsy behavior. Monitoring closely.' }}
+                    </span>
+                </div>
+
                 {{-- Tombol aksi --}}
                 <div style="display:flex;flex-direction:column;gap:8px;">
                     <a href="{{ route('trips.show', $lastTrip->id) }}"
