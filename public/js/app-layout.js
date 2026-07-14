@@ -367,6 +367,11 @@ setInterval(pollUnreadCount, 30000);
 document.addEventListener('DOMContentLoaded', function () {
     if (typeof window.Echo !== 'undefined') {
         window.Echo.channel('fleet-tracking')
-            .listen('.alert.created', () => pollUnreadCount());
+            .listen('.alert.created', () => {
+                pollUnreadCount();
+                if (typeof loadNotifs === 'function' && typeof notifOpen !== 'undefined' && notifOpen) {
+                    loadNotifs();
+                }
+            });
     }
 });

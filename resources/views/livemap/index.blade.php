@@ -56,7 +56,11 @@
             $diff   = now()->diffInMinutes(\Carbon\Carbon::parse($trip->estimated_arrival_at), false);
             $etaMin = $diff > 0 ? $diff : 0;
         }
-        $ds      = $latestDriverStatus->driver_status ?? 'normal';
+        $ds = 'normal';
+        if (isset($latestDriverStatus)) {
+            if ($latestDriverStatus->is_alarm) $ds = 'danger';
+            elseif ($latestDriverStatus->event_type === 'drowsy') $ds = 'warning';
+        }
         $dsStyle = match($ds) {
             'warning' => 'background:#ffedd5;color:#c2410c',
             'danger'  => 'background:#fee2e2;color:#b91c1c',
