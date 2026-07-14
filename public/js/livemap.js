@@ -735,8 +735,8 @@ async function pollAPIeta() {
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         let data = await res.json();
         
-        // Update Driver Status Real-time
-        if (data.driver_status) {
+        // Update Driver Status Real-time — SELALU diupdate, tidak bergantung activeTrip
+        if (data.driver_status !== undefined && data.driver_status !== null) {
             updateDriverStatusUI(data.driver_status);
         }
 
