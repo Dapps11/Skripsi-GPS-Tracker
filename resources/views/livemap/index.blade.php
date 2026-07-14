@@ -59,7 +59,7 @@
         $ds = 'normal';
         if (isset($latestDriverStatus)) {
             if ($latestDriverStatus->is_alarm) $ds = 'danger';
-            elseif ($latestDriverStatus->event_type === 'drowsy') $ds = 'warning';
+            elseif (strtolower($latestDriverStatus->event_type ?? '') === 'drowsy') $ds = 'warning';
         }
         $dsStyle = match($ds) {
             'warning' => 'background:#ffedd5;color:#c2410c',
@@ -419,7 +419,7 @@
                         $ds = 'normal';
                         if (isset($latestDriverStatus)) {
                             if ($latestDriverStatus->is_alarm) $ds = 'danger';
-                            elseif ($latestDriverStatus->event_type === 'drowsy') $ds = 'warning';
+                            elseif (strtolower($latestDriverStatus->event_type ?? '') === 'drowsy') $ds = 'warning';
                         }
                         $dsStyle = $ds === 'normal' ? 'background:#dcfce7;color:#15803d' : ($ds === 'warning' ? 'background:#fef08a;color:#a16207' : 'background:#fee2e2;color:#b91c1c');
                     @endphp

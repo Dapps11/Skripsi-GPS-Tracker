@@ -479,7 +479,7 @@ class IoTApiController extends Controller
             'vehicle_id'      => $device->vehicle_id,
             'driver_id'       => $device->driver_id,
             'trip_id'         => $activeTrip ? $activeTrip->id : null, // <-- Otomatis terisi!
-            'event_type'      => $data['event_type'], 
+            'event_type'      => strtolower($data['event_type']), 
             'reasons'         => $reasonString,
             'perclos_value'   => $data['perclos'] ?? null,
             'ear_value'       => $data['ear'] ?? null,

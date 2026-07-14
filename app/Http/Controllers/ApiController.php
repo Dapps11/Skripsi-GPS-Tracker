@@ -64,9 +64,9 @@ class ApiController extends Controller
                         ->orderByDesc('recorded_at')
                         ->first(['event_type', 'is_alarm']);
         $driverStatus = match(true) {
-            $latestMonitoring?->is_alarm == true          => 'danger',
-            $latestMonitoring?->event_type === 'drowsy'   => 'warning',
-            default                                        => 'normal',
+            $latestMonitoring?->is_alarm == true                          => 'danger',
+            strtolower($latestMonitoring?->event_type ?? '') === 'drowsy' => 'warning',
+            default                                                       => 'normal',
         };
 
         return response()->json([
